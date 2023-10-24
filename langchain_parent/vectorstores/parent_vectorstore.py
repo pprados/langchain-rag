@@ -1,6 +1,6 @@
 import hashlib
 import uuid
-from typing import Any, List, Optional, Type, TypeVar, cast, Tuple, Dict
+from typing import Any, List, Optional, Type, TypeVar, cast, Tuple, Dict, Union
 
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.pydantic_v1 import BaseModel, Extra, Field
@@ -21,22 +21,26 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
         extra = Extra.allow
         arbitrary_types_allowed = True
 
-    # record_manager:RecordManager
-    docstore: BaseStore[str, Document]
+    docstore: BaseStore[str, Union[Document, List[str]]]
     """The storage layer for the parent documents"""
-    parent_id_key: str = "source"
+
+    doc_id_key: str = "source"
     """The metadata to identify the id of the parents """
-    chunk_id_key: str = "_chuck_id"
-    """The metadata to identify the bucket """
-    all_transformed_id_key: str = "_var_id"
+
+    chunk_id_key: str = "_chunk_id"
+    """The metadata to identify the chunck. Add an id if the chunk can not have one """
+
+    child_ids_key: str = "_child_ids"
     """Contain a list with the vectorstore id for all 
     corresponding transformed chunk."""
+
     search_type: str = "similarity"
     """Type of search to perform. Defaults to "similarity"."""
+
     search_kwargs: dict = Field(default_factory=dict)
     """Keyword arguments to pass to the search function."""
 
-    child_transformer: BaseDocumentTransformer
+    chunk_transformer: BaseDocumentTransformer
     """The transformer to use to create child documents."""
 
     """The key to use to track the parent id. This will be stored in the
@@ -98,72 +102,111 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
         # parent_ids = kwargs.get("ids")
         # add_to_docstore = kwargs.get("add_to_docstore", False)
         # FIXME: a débugger
+        chunk_for_docs: Dict[str, List[str]] = []
+        chunk_ids = None
+        map_doc_ids:Dict[Any,str]={}
         if self.parent_transformer:
-            if ids:
-                # The ids is for the parents
+            if ids:  # It's the parent ids
                 if len(documents) != len(ids):
                     raise ValueError(
                         "Got uneven list of documents and ids. "
                         "If `ids` is provided, should be same length as `documents`."
                     )
-                # Inject the ids in the parents
+
+                # Inject the ids in the parents. Then, each chunk has this id
+                # for id, doc in zip(ids, documents):
+                #     doc.metadata[self.doc_id_key] = id
                 for id, doc in zip(ids, documents):
-                    doc.metadata[self.parent_id_key] = id
-                ids = None  # Now, generate ids for chunks
-            # all_transformed_id_key
-            # all_chunk:List[Document]=[]
-            # for doc in documents:
-            #     _chunks = self.parent_transformer.transform_documents([documents])
-            #     for _chunk in _chunks:
-            #         _chunk.metadata[self.parent_id_key]=
+                    map_doc_ids[doc.metadata[self.doc_id_key]]=id
+
+            else:
+                for doc in documents:
+                    if self.doc_id_key not in doc.metadata:
+                        raise ValueError(
+                            "Each document must have a uniq id."
+                        )
+                    ids = []
+                    for doc in documents:
+                        # Some docstore refuse some characters in the id.
+                        # We convert the id to hash
+                        doc_id = doc.metadata[self.doc_id_key]
+                        hash_id = hashlib.sha256(doc_id.encode("utf-8")).hexdigest()
+                        ids.append(hash_id)
+                        map_doc_ids[doc_id]=hash_id
+
+        else:
+            chunk_ids = ids
+            ids = None
 
         if self.parent_transformer:
             # TODO Check if all documents has en id
 
-           chunk_documents = self.parent_transformer.transform_documents(documents)
+            chunk_documents = self.parent_transformer.transform_documents(documents)
         else:
             chunk_documents = documents
 
-        if ids is None:  # FIXME: vérifier tous les scénarios
+        if chunk_ids is None:  # FIXME: vérifier tous les scénarios
             # Generate an id for each chunk, or use the ids
+            # Put the associated chunk id the the transformation.
+            # Then, it's possible to retrieve the original chunk with this
+            # transformation.
+            # for chunk in chunk_documents
+            #     if self.chunk_id_key not in chunk.metadata:
+            #         chunk.metadata[self.chunk_id_key]=str(uuid.uuid4())
             chunk_ids = [
-                doc.metadata[
-                    self.chunk_id_key] if self.chunk_id_key in doc.metadata else str(
-                    uuid.uuid4()) for doc in
+                chunk.metadata.get(self.chunk_id_key, str(uuid.uuid4())) for chunk in
                 chunk_documents]
-            if not add_to_docstore:
+            if not add_to_docstore:  # FIXME
                 raise ValueError(
                     "If ids are not passed in, `add_to_docstore` MUST be True"
-                )
+                )  # TODO: verifier si pas 2 fois le même id ?
+        else:
+            chunk_ids = ids
 
-        full_docs = []
-        for i, doc in enumerate(chunk_documents):
-            _chunk_id = chunk_ids[i]  # FIXME: //
-            transformed_docs:List[Document] = self.child_transformer.transform_documents([doc])
-            for _transformed_doc in transformed_docs:
-                _transformed_doc.metadata[self.chunk_id_key] = _chunk_id
-            chunk_vs_ids = self.vectorstore.add_documents(transformed_docs)
-            # Inject id of transformed document in the chuck document
-            doc.metadata[self.all_transformed_id_key] = ','.join(chunk_vs_ids)
-            full_docs.append((_chunk_id, doc))
+        chunk_ids_for_doc: Dict[str, List[str]] = {}
+        if self.parent_transformer:
+            # Associate each chunk with the parent
+            for chunk_id, chunk_document in zip(chunk_ids, chunk_documents):
+                doc_id=map_doc_ids[chunk_document.metadata[self.doc_id_key]]
+                chunk_ids = chunk_ids_for_doc.get(doc_id, [])
+                chunk_ids.append(chunk_id)
+                chunk_ids_for_doc[doc_id]=chunk_ids
+
+        full_chunk_docs = []
+        for chunk_id, chunk_doc in zip(chunk_ids, chunk_documents):
+            all_transformed_chunk: List[
+                Document] = self.chunk_transformer.transform_documents([chunk_doc])
+            # In in transformed chunk, add the id of the associated chunk
+            for transformed_chunk in all_transformed_chunk:
+                transformed_chunk.metadata[self.chunk_id_key] = chunk_id
+            # Save the transformed versions
+            transformed_persistance_ids = self.vectorstore.add_documents(
+                all_transformed_chunk)
+            # Inject id of transformed ids in the chuck document
+            chunk_doc.metadata[self.child_ids_key] = ','.join(
+                transformed_persistance_ids)
+            # Prepare the mset in docstore
+            full_chunk_docs.append((chunk_id, chunk_doc))
 
         if add_to_docstore:
-            self.docstore.mset(full_docs)
+            # Add the chunks in docstore.
+            # In the retriever, it's this intances to return
+            # in metadata[child_ids_key], it's possible to find the id of all
+            # transformed versions
+            self.docstore.mset(full_chunk_docs)
+            # TODO: voir si pas de add_to_docstore
+
         if self.parent_transformer:
-            if not ids:
-                ids: List[str] = []
-                # Some docstore can not have an url for the key
-                for doc in documents:
-                    key = doc.metadata[self.parent_id_key]
-                    hash = hashlib.sha256()
-                    hash.update(bytes(key, 'utf-8'))
-                    ids.append(hash.hexdigest())
-            # Save the parent documents  FIXME: flag add_to_docstore
-            self.docstore.mset(
-                [(parent_id, doc.metadata) for parent_id, doc in zip(ids, documents)])
-        if self.parent_transformer:
-            #parent_documents_metadata[self.all_transformed_id_key]
-            return [doc.metadata[self.parent_id_key] for doc in documents]
+            # With the *parent* mode, for each parent document,
+            # we must save the id of all chunk.
+            # Then, it's possible to remove/update all chunk when the parent document
+            # was updated.
+            # Save the parent association wih all chunk  FIXME: flag add_to_docstore
+            mset_values: List[Tuple[str, List[str]]] = []
+            for parent_id, doc in zip(ids, documents):
+                mset_values.append((parent_id, chunk_ids_for_doc[parent_id]))
+            self.docstore.mset(mset_values)
+            return ids
         else:
             return chunk_ids
 
@@ -185,9 +228,8 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                     hash_ids.append(hash.hexdigest())
                 ids = hash_ids
 
-            parent_documents_metadata:Dict[str,Any] = self.docstore.mget(ids)
-            parent_documents_metadata[self.all_transformed_id_key].split(',')
-            print(parent_documents)
+            parent_documents_metadata: Dict[str, Any] = self.docstore.mget(ids)
+            parent_documents_metadata[self.child_ids_key].split(',')
 
             # # Ids is the *parent* id
             # # Search all child ids with the parent_id_key
@@ -222,7 +264,7 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
         for doc in docs:
             if doc:
                 delete_something = True
-                self.vectorstore.delete(doc.metadata[self.all_transformed_id_key])
+                self.vectorstore.delete(doc.metadata[self.child_ids_key])
 
         if ids:
             self.docstore.mdelete(ids)

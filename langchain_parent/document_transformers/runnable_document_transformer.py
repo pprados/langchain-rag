@@ -1,16 +1,19 @@
-from typing import Sequence, Optional, Any, Iterator
+from typing import Sequence, Optional, Any, Iterator, AsyncIterator
 
 from langchain.schema import Document, BaseDocumentTransformer
-from langchain.schema.runnable import RunnableSerializable, RunnableConfig, \
-    RunnableGenerator
-from langchain_parent.document_transformers.document_transformer import \
+from langchain.schema.runnable import RunnableSerializable, RunnableConfig
+from .document_transformer import \
     GeneratorBaseDocumentTransformer
 
 
-# FIXME: must be in langchain
 class RunnableDocumentTransformer(
     RunnableSerializable[Sequence[Document], Sequence[Document]],
     BaseDocumentTransformer):
+    """ This is a transition class. It must be integrated in BaseDocumentTransformer.
+    Transform a `BaseDocumentTransformer`to a `RunnableDocumentTransformer`.
+    Now, it's possible to create a chain of transformations
+    (only if the transformation is compatible with `RunnableDocumentTransformer`)
+    """
 
     def invoke(
             self,
@@ -60,14 +63,14 @@ class RunnableGeneratorDocumentTransformer(
 
     async def ainvoke(
             self,
-            input: Iterator[Document],
+            input: Iterator[Document],  # TODO: accept |Sequence[Document] ?
             config: Optional[RunnableConfig] = None,
             **kwargs: Optional[Any],
-    ) -> Iterator[Document]:
+    ) -> AsyncIterator[Document]:
         # Default implementation, without generator
         config = config or {}
         if hasattr(self, "alazy_transform_documents"):
-            return await self.alazy_transform_documents(input)
+            return self.alazy_transform_documents(input,**config)
         # return (for x in await self.atransform_documents(
         #     list(input),
         #     **config
