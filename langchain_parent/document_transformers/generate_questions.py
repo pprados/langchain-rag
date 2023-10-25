@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from functools import partial
 from typing import Callable, Sequence, Optional, Dict, Any, Generator, cast
 
@@ -95,7 +96,7 @@ class GenerateQuestions(RunnableGeneratorDocumentTransformer):
             if not outputs[i]:
                 continue
             yield Document(page_content=outputs[i],
-                           metadata=doc.metadata)
+                           metadata=copy.deepcopy(doc.metadata))
 
     async def atransform_documents(
             self, documents: Sequence[Document], **kwargs: Any

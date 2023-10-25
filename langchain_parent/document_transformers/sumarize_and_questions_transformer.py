@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from functools import partial
 from typing import Callable, Sequence, Optional, Dict, Any, Generator, List, cast
 
@@ -69,7 +70,8 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
                 continue
             yield Document(page_content=output.summary, metadata=doc.metadata)
             for q in output.questions:
-                yield Document(page_content=q, metadata=doc.metadata)
+                yield Document(page_content=q,
+                               metadata=copy.deepcopy(doc.metadata))
 
     @classmethod
     def from_llm(

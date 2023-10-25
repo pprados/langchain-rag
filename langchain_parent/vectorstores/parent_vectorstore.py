@@ -49,12 +49,20 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
     """The transformer to use to create parent documents.
     If none, then the parent documents will be the raw documents passed in."""
 
+    def _get_trunk_from_sub_docs(self, sub_docs: List[Document]) -> List[Document]:
+        ids = []
+        for d in sub_docs:
+            if d.metadata[self.chunk_id_key] not in ids:
+                ids.append(d.metadata[self.chunk_id_key])
+        docs = self.docstore.mget(ids)
+        return [d for d in docs if d is not None]
+
     def as_retriever(self, **kwargs: Any) -> VectorStoreRetriever:
         class ParentVectorRetriever(VectorStoreRetriever):
             """Retrieve from a set of multiple embeddings for the same document."""
 
             def _get_relevant_documents(
-                    self,
+                    me,
                     query: str, *,
                     run_manager: CallbackManagerForRetrieverRun
             ) -> List[Document]:
@@ -67,13 +75,7 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                 """
                 vectorstore = cast(ParentVectorStore, self.vectorstore)
                 sub_docs = vectorstore.similarity_search(query, **self.search_kwargs)
-                # We do this to maintain the order of the ids that are returned
-                ids = []
-                for d in sub_docs:
-                    if d.metadata[vectorstore.chunk_id_key] not in ids:
-                        ids.append(d.metadata[vectorstore.chunk_id_key])
-                docs = vectorstore.docstore.mget(ids)
-                return [d for d in docs if d is not None]
+                return self._get_trunk_from_sub_docs(sub_docs)
 
         return ParentVectorRetriever(
             vectorstore=self,
@@ -98,13 +100,8 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                 to set this to False if the documents are already in the docstore
                 and you don't want to re-add them.
         """
-
-        # parent_ids = kwargs.get("ids")
-        # add_to_docstore = kwargs.get("add_to_docstore", False)
-        # FIXME: a débugger
-        chunk_for_docs: Dict[str, List[str]] = []
         chunk_ids = None
-        map_doc_ids:Dict[Any,str]={}
+        map_doc_ids: Dict[Any, str] = {}
         if self.parent_transformer:
             if ids:  # It's the parent ids
                 if len(documents) != len(ids):
@@ -113,11 +110,8 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                         "If `ids` is provided, should be same length as `documents`."
                     )
 
-                # Inject the ids in the parents. Then, each chunk has this id
-                # for id, doc in zip(ids, documents):
-                #     doc.metadata[self.doc_id_key] = id
                 for id, doc in zip(ids, documents):
-                    map_doc_ids[doc.metadata[self.doc_id_key]]=id
+                    map_doc_ids[doc.metadata[self.doc_id_key]] = id
 
             else:
                 for doc in documents:
@@ -130,9 +124,9 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                         # Some docstore refuse some characters in the id.
                         # We convert the id to hash
                         doc_id = doc.metadata[self.doc_id_key]
-                        hash_id = hashlib.sha256(doc_id.encode("utf-8")).hexdigest()
+                        hash_id = hashlib.sha256(str(doc_id).encode("utf-8")).hexdigest()
                         ids.append(hash_id)
-                        map_doc_ids[doc_id]=hash_id
+                        map_doc_ids[doc_id] = hash_id
 
         else:
             chunk_ids = ids
@@ -160,23 +154,22 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                 raise ValueError(
                     "If ids are not passed in, `add_to_docstore` MUST be True"
                 )  # TODO: verifier si pas 2 fois le même id ?
-        else:
-            chunk_ids = ids
 
         chunk_ids_for_doc: Dict[str, List[str]] = {}
         if self.parent_transformer:
             # Associate each chunk with the parent
             for chunk_id, chunk_document in zip(chunk_ids, chunk_documents):
-                doc_id=map_doc_ids[chunk_document.metadata[self.doc_id_key]]
-                chunk_ids = chunk_ids_for_doc.get(doc_id, [])
-                chunk_ids.append(chunk_id)
-                chunk_ids_for_doc[doc_id]=chunk_ids
+                doc_id = map_doc_ids[chunk_document.metadata[self.doc_id_key]]
+                list_of_chunk_ids = chunk_ids_for_doc.get(doc_id, [])
+                list_of_chunk_ids.append(chunk_id)
+                chunk_ids_for_doc[doc_id] = list_of_chunk_ids
 
         full_chunk_docs = []
-        for chunk_id, chunk_doc in zip(chunk_ids, chunk_documents):
+        for chunk_id, chunk_doc in zip(chunk_ids,
+                                       chunk_documents):  # TOTRY: on call of chunk_transformer
             all_transformed_chunk: List[
                 Document] = self.chunk_transformer.transform_documents([chunk_doc])
-            # In in transformed chunk, add the id of the associated chunk
+            # If in transformed chunk, add the id of the associated chunk
             for transformed_chunk in all_transformed_chunk:
                 transformed_chunk.metadata[self.chunk_id_key] = chunk_id
             # Save the transformed versions
@@ -219,56 +212,25 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
     def delete(self, ids: Optional[List[str]] = None, **kwargs: Any) -> Optional[bool]:
         if self.parent_transformer:
             if not ids:
-                pass  # FIXME
-            if self.parent_transformer:
-                hash_ids = []
-                for key in ids:
-                    hash = hashlib.sha256()
-                    hash.update(bytes(key, 'utf-8'))
-                    hash_ids.append(hash.hexdigest())
-                ids = hash_ids
+                raise ValueError(
+                    "ids must be set"
+                )
+            chunk_by_doc_ids = cast(List[List[str]], self.docstore.mget(ids))
+        else:
+            chunk_by_doc_ids = ids
 
-            parent_documents_metadata: Dict[str, Any] = self.docstore.mget(ids)
-            parent_documents_metadata[self.child_ids_key].split(',')
-
-            # # Ids is the *parent* id
-            # # Search all child ids with the parent_id_key
-            # from langchain.retrievers.self_query.base import _get_builtin_translator
-            # from langchain.chains.query_constructor.base import \
-            #     StructuredQueryOutputParser
-            # for id in ids:
-            #     filter=f'eq("{self.parent_id_key}","{id}")'
-            #     query=""
-            #     escape_query = re.sub(r'([\"])', r'\\\1', query)
-            #     escape_filter = re.sub(r'([\"])', r'\\\1', filter)
-            #
-            #     structured_query = StructuredQueryOutputParser.from_components().parse(
-            #         ('```json\n'
-            #          '{\n'
-            #          # f'"limit":{top_k},\n'
-            #          f'"query":"{escape_query}",\n'
-            #          f'"filter":"{escape_filter}"\n'
-            #          '}\n'
-            #          '```'
-            #          )
-            #     )
-            #     translator=_get_builtin_translator(self.vectorstore)
-            #     new_query, kwargs_filter = translator.visit_structured_query(structured_query)
-            #     self.vectorstore.get(
-            #         query="",
-            #         search_type="similarity",
-            #         **kwargs_filter)
-
-        docs = self.docstore.mget(ids)
-        delete_something = False
-        for doc in docs:
-            if doc:
-                delete_something = True
-                self.vectorstore.delete(doc.metadata[self.child_ids_key])
-
-        if ids:
-            self.docstore.mdelete(ids)
-        return delete_something
+        # Remove all associated transformed chunk
+        transformed_ids = set()
+        for chunk_by_doc in chunk_by_doc_ids:
+            chunk_docs = self.docstore.mget(chunk_by_doc)
+            self.docstore.mdelete(chunk_by_doc)
+            for chunk_doc in chunk_docs:
+                if chunk_doc:
+                    transformed_ids.update(
+                        chunk_doc.metadata[self.child_ids_key].split(','))
+        if transformed_ids:
+            self.vectorstore.delete(list(transformed_ids))
+        return len(transformed_ids) != 0
 
     async def adelete(
             self, ids: Optional[List[str]] = None, **kwargs: Any
@@ -288,7 +250,9 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
 
     # %% FIXME
     def search(self, query: str, search_type: str, **kwargs: Any) -> List[Document]:
-        return self.vectorstore.search(query=query, search_type=search_type, **kwargs)
+        subdocs = self.vectorstore.search(query=query, search_type=search_type,
+                                          **kwargs)
+        return self._get_trunk_from_sub_docs(subdocs)
 
     async def asearch(
             self, query: str, search_type: str, **kwargs: Any
@@ -300,12 +264,16 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
     def similarity_search(
             self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
-        return self.vectorstore.similarity_search(query=query, k=k, **kwargs)
+        subdocs = self.vectorstore.similarity_search(query=query, k=k, **kwargs)
+        return self._get_trunk_from_sub_docs(subdocs)
 
     def similarity_search_with_score(
             self, *args: Any, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
-        return self.vectorstore.similarity_search_with_score(*args, **kwargs)
+        subdocs_and_score = self.vectorstore.similarity_search_with_score(*args,
+                                                                          **kwargs)
+        # FIXME: et faire les async
+        return self._get_trunk_from_sub_docs(subdocs_and_score)
 
     def similarity_search_with_relevance_scores(
             self,
@@ -313,35 +281,40 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
             k: int = 4,
             **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
-        return self.vectorstore.similarity_search_with_relevance_scores(
+        subdocs = self.vectorstore.similarity_search_with_relevance_scores(
             query=query, k=k, **kwargs
         )
+        return self._get_trunk_from_sub_docs(subdocs)
 
     async def asimilarity_search_with_relevance_scores(
             self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
-        return await self.vectorstore.asimilarity_search_with_relevance_scores(
+        subdocs = await self.vectorstore.asimilarity_search_with_relevance_scores(
             query=query, k=k, **kwargs
         )
+        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async
 
     async def asimilarity_search(
             self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
-        return await self.vectorstore.asimilarity_search(query=query, k=k, **kwargs)
+        subdocs = await self.vectorstore.asimilarity_search(query=query, k=k, **kwargs)
+        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async
 
     def similarity_search_by_vector(
             self, embedding: List[float], k: int = 4, **kwargs: Any
     ) -> List[Document]:
-        return self.vectorstore.similarity_search_by_vector(
+        subdocs = self.vectorstore.similarity_search_by_vector(
             embedding=embedding, k=k, **kwargs
         )
+        return self._get_trunk_from_sub_docs(subdocs)
 
     async def asimilarity_search_by_vector(
             self, embedding: List[float], k: int = 4, **kwargs: Any
     ) -> List[Document]:
-        return await self.vectorstore.asimilarity_search_by_vector(
+        subdocs = await self.vectorstore.asimilarity_search_by_vector(
             embedding=embedding, k=k, **kwargs
         )
+        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async
 
     def max_marginal_relevance_search(
             self,
@@ -351,9 +324,10 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
             lambda_mult: float = 0.5,
             **kwargs: Any,
     ) -> List[Document]:
-        return self.vectorstore.max_marginal_relevance_search(
+        subdocs = self.vectorstore.max_marginal_relevance_search(
             query=query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
+        return self._get_trunk_from_sub_docs(subdocs)
 
     async def amax_marginal_relevance_search(
             self,
@@ -363,9 +337,10 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
             lambda_mult: float = 0.5,
             **kwargs: Any,
     ) -> List[Document]:
-        return await self.vectorstore.amax_marginal_relevance_search(
+        subdocs = await self.vectorstore.amax_marginal_relevance_search(
             query=query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
+        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async
 
     def max_marginal_relevance_search_by_vector(
             self,
@@ -375,9 +350,10 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
             lambda_mult: float = 0.5,
             **kwargs: Any,
     ) -> List[Document]:
-        return self.vectorstore.max_marginal_relevance_search_by_vector(
+        subdocs = self.vectorstore.max_marginal_relevance_search_by_vector(
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
+        return self._get_trunk_from_sub_docs(subdocs)
 
     async def amax_marginal_relevance_search_by_vector(
             self,
@@ -387,6 +363,7 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
             lambda_mult: float = 0.5,
             **kwargs: Any,
     ) -> List[Document]:
-        return await self.vectorstore.amax_marginal_relevance_search_by_vector(
+        subdocs = await self.vectorstore.amax_marginal_relevance_search_by_vector(
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
+        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async

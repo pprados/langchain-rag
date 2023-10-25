@@ -1,3 +1,4 @@
+import copy
 from typing import Sequence, Any, Iterator
 
 from langchain.schema import Document
@@ -9,5 +10,5 @@ class CopyDocumentTransformer(RunnableGeneratorDocumentTransformer):
     def lazy_transform_documents(
             self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
-        yield from (doc for doc in documents)
+        yield from (copy.deepcopy(doc) for doc in documents)
 

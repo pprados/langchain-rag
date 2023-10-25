@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from functools import partial
 from typing import Callable, Sequence, Optional, Dict, Any, Generator
 
@@ -63,7 +64,8 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
                 **_input)
             if not output:
                 continue
-            yield Document(page_content=str(output), metadata=doc.metadata)
+            yield Document(page_content=str(output),
+                           metadata=copy.deepcopy(doc.metadata))
 
     def transform_documents(
             self,
