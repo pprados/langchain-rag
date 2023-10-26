@@ -1,6 +1,7 @@
 import hashlib
 import uuid
-from typing import Any, List, Optional, Type, TypeVar, cast, Tuple, Dict, Union
+from typing import Any, List, Optional, Type, TypeVar, cast, Tuple, Dict, Union, \
+    Container
 
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.pydantic_v1 import BaseModel, Extra, Field
@@ -40,7 +41,7 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
     search_kwargs: dict = Field(default_factory=dict)
     """Keyword arguments to pass to the search function."""
 
-    chunk_transformer: BaseDocumentTransformer
+    chunk_transformer: Optional[BaseDocumentTransformer]
     """The transformer to use to create child documents."""
 
     """The key to use to track the parent id. This will be stored in the
@@ -58,6 +59,9 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
         return [d for d in docs if d is not None]
 
     def as_retriever(self, **kwargs: Any) -> VectorStoreRetriever:
+        if not self.chunk_transformer:
+            return self.vectorstore.as_retriever(**kwargs)
+
         class ParentVectorRetriever(VectorStoreRetriever):
             """Retrieve from a set of multiple embeddings for the same document."""
 
@@ -124,7 +128,8 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                         # Some docstore refuse some characters in the id.
                         # We convert the id to hash
                         doc_id = doc.metadata[self.doc_id_key]
-                        hash_id = hashlib.sha256(str(doc_id).encode("utf-8")).hexdigest()
+                        hash_id = hashlib.sha256(
+                            str(doc_id).encode("utf-8")).hexdigest()
                         ids.append(hash_id)
                         map_doc_ids[doc_id] = hash_id
 
@@ -165,29 +170,34 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                 chunk_ids_for_doc[doc_id] = list_of_chunk_ids
 
         full_chunk_docs = []
-        for chunk_id, chunk_doc in zip(chunk_ids,
-                                       chunk_documents):  # TOTRY: on call of chunk_transformer
-            all_transformed_chunk: List[
-                Document] = self.chunk_transformer.transform_documents([chunk_doc])
-            # If in transformed chunk, add the id of the associated chunk
-            for transformed_chunk in all_transformed_chunk:
-                transformed_chunk.metadata[self.chunk_id_key] = chunk_id
-            # Save the transformed versions
-            transformed_persistance_ids = self.vectorstore.add_documents(
-                all_transformed_chunk)
-            # Inject id of transformed ids in the chuck document
-            chunk_doc.metadata[self.child_ids_key] = ','.join(
-                transformed_persistance_ids)
-            # Prepare the mset in docstore
-            full_chunk_docs.append((chunk_id, chunk_doc))
+        # TOTRY: on call of chunk_transformer
+        if not self.chunk_transformer:
+            self.vectorstore.add_documents(documents=chunk_documents, ids=chunk_ids)
+        else:
+            for chunk_id, chunk_doc in zip(chunk_ids,
+                                           chunk_documents):
+                all_transformed_chunk: Container[
+                    Document] = self.chunk_transformer.transform_documents(
+                    [chunk_doc])  # FIXME: un seul
+                # If in transformed chunk, add the id of the associated chunk
+                for transformed_chunk in all_transformed_chunk:
+                    transformed_chunk.metadata[self.chunk_id_key] = chunk_id
+                # Save the transformed versions
+                transformed_persistance_ids = self.vectorstore.add_documents(
+                    all_transformed_chunk)
+                # Inject id of transformed ids in the chuck document
+                chunk_doc.metadata[self.child_ids_key] = ','.join(
+                    transformed_persistance_ids)
+                # Prepare the mset in docstore
+                full_chunk_docs.append((chunk_id, chunk_doc))
 
-        if add_to_docstore:
-            # Add the chunks in docstore.
-            # In the retriever, it's this intances to return
-            # in metadata[child_ids_key], it's possible to find the id of all
-            # transformed versions
-            self.docstore.mset(full_chunk_docs)
-            # TODO: voir si pas de add_to_docstore
+            if add_to_docstore:
+                # Add the chunks in docstore.
+                # In the retriever, it's this intances to return
+                # in metadata[child_ids_key], it's possible to find the id of all
+                # transformed versions
+                self.docstore.mset(full_chunk_docs)
+                # TODO: voir si pas de add_to_docstore
 
         if self.parent_transformer:
             # With the *parent* mode, for each parent document,
@@ -215,22 +225,28 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                 raise ValueError(
                     "ids must be set"
                 )
-            chunk_by_doc_ids = cast(List[List[str]], self.docstore.mget(ids))
+            lists_of_chunk_by_doc_ids = cast(List[List[str]], self.docstore.mget(ids))
+            chunk_by_doc_ids = [id for l in lists_of_chunk_by_doc_ids for id in l]
         else:
             chunk_by_doc_ids = ids
 
-        # Remove all associated transformed chunk
         transformed_ids = set()
-        for chunk_by_doc in chunk_by_doc_ids:
-            chunk_docs = self.docstore.mget(chunk_by_doc)
-            self.docstore.mdelete(chunk_by_doc)
+        if self.chunk_transformer:
+            chunk_docs = self.docstore.mget(chunk_by_doc_ids)
+            self.docstore.mdelete(chunk_by_doc_ids)
             for chunk_doc in chunk_docs:
                 if chunk_doc:
                     transformed_ids.update(
                         chunk_doc.metadata[self.child_ids_key].split(','))
         if transformed_ids:
-            self.vectorstore.delete(list(transformed_ids))
-        return len(transformed_ids) != 0
+            self.vectorstore.delete(ids=list(transformed_ids))
+        elif self.parent_transformer:
+            return self.vectorstore.delete(ids=chunk_by_doc_ids)
+        elif not self.parent_transformer and self.chunk_transformer:
+            return len(transformed_ids) != 0
+        else:
+            return self.vectorstore.delete(ids=ids)
+
 
     async def adelete(
             self, ids: Optional[List[str]] = None, **kwargs: Any

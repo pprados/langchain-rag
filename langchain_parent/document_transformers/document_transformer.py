@@ -1,20 +1,23 @@
 from abc import abstractmethod
 from collections.abc import AsyncIterator
-from typing import Iterator, Sequence, Any
+from typing import Iterator, Sequence, Any, TypeVar, Generic
 
 from langchain.schema import BaseDocumentTransformer, Document
 
-
-class _AsyncIterator_from_Iterator(AsyncIterator):
-
-    def __init__(self, iterator):
-        self.iterator = iterator
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        return next(self.iterator)
+# T = TypeVar('T')
+# class _AsyncIterator_from_Iterator(AsyncIterator,Generic[T]):
+#
+#     def __init__(self, iterator:Iterator[T]):
+#         self.iterator = iterator
+#
+#     def __aiter__(self) -> AsyncIterator[T]:
+#         return self
+#
+#     async def __anext__(self) -> T:
+#         try:
+#             return next(self.iterator)
+#         except StopIteration:
+#             raise StopAsyncIteration()
 
 
 class GeneratorBaseDocumentTransformer(BaseDocumentTransformer):
@@ -35,7 +38,6 @@ class GeneratorBaseDocumentTransformer(BaseDocumentTransformer):
         return [doc async for doc in
                 self.alazy_transform_documents(iter(documents), **kwargs)]
 
-    @abstractmethod
     def lazy_transform_documents(
             self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
@@ -53,7 +55,7 @@ class GeneratorBaseDocumentTransformer(BaseDocumentTransformer):
     async def alazy_transform_documents(
             self, documents: Iterator[Document],
             **kwargs: Any
-    ) -> AsyncIterator[Document]:
+    ) -> Iterator[Document]:
         """Asynchronously transform an iterator of documents.
 
         Args:
@@ -63,5 +65,4 @@ class GeneratorBaseDocumentTransformer(BaseDocumentTransformer):
             An interator of transformed Documents.
         """
         # Default implementation. Not realy lazy.
-        result = await self.atransform_documents(list(documents))
-        return _AsyncIterator_from_Iterator(iter(result))
+        return iter(await self.atransform_documents(list(documents)))

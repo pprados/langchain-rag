@@ -1,9 +1,8 @@
-from typing import Sequence, Optional, Any, Iterator, AsyncIterator
+from typing import Sequence, Optional, Any, Iterator
 
 from langchain.schema import Document, BaseDocumentTransformer
 from langchain.schema.runnable import RunnableSerializable, RunnableConfig
-from .document_transformer import \
-    GeneratorBaseDocumentTransformer
+from .document_transformer import GeneratorBaseDocumentTransformer
 
 
 class RunnableDocumentTransformer(
@@ -40,7 +39,7 @@ class RunnableDocumentTransformer(
 
 
 class RunnableGeneratorDocumentTransformer(
-    RunnableSerializable[Sequence[Document], Sequence[Document]],
+    RunnableSerializable[Iterator[Document], Iterator[Document]],
     GeneratorBaseDocumentTransformer):
 
     def invoke(
@@ -66,13 +65,9 @@ class RunnableGeneratorDocumentTransformer(
             input: Iterator[Document],  # TODO: accept |Sequence[Document] ?
             config: Optional[RunnableConfig] = None,
             **kwargs: Optional[Any],
-    ) -> AsyncIterator[Document]:
+    ) -> Iterator[Document]:
         # Default implementation, without generator
         config = config or {}
         if hasattr(self, "alazy_transform_documents"):
-            return self.alazy_transform_documents(input,**config)
-        # return (for x in await self.atransform_documents(
-        #     list(input),
-        #     **config
-        # ))
-        # FIXME
+            return self.alazy_transform_documents(input, **config)
+        return iter(await self.atransform_documents(input, **config))
