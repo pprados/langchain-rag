@@ -8,7 +8,7 @@ from langchain.pydantic_v1 import BaseModel, Extra, Field
 from langchain.schema import BaseStore
 from langchain.schema.document import BaseDocumentTransformer, Document
 from langchain.schema.embeddings import Embeddings
-from langchain.schema.vectorstore import VectorStoreRetriever
+from langchain.schema.vectorstore import VectorStoreRetriever, VectorStore
 
 from .wrapper_vectorstore import WrapperVectorStore
 
@@ -16,12 +16,60 @@ from .wrapper_vectorstore import WrapperVectorStore
 VST = TypeVar("VST", bound="VectorStore")
 
 
-class ParentVectorStore(BaseModel, WrapperVectorStore):
-    # Deprecated
+class RAGVectorStore(BaseModel, WrapperVectorStore):
+    """Retrieve small chunks then retrieve their parent documents.
+
+    When splitting documents for retrieval, there are often conflicting desires:
+
+    1. You may want to have small documents, so that their embeddings can most
+        accurately reflect their meaning. If too long, then the embeddings can
+        lose meaning.
+    2. You want to have long enough documents that the context of each chunk is
+        retained.
+
+    The ParentDocumentRetriever strikes that balance by splitting and storing
+    small chunks of data. During retrieval, it first fetches the small chunks
+    but then looks up the parent ids for those chunks and returns those larger
+    documents.
+
+    Note that "parent document" refers to the document that a small chunk
+    originated from. This can either be the whole raw document OR a larger
+    chunk.
+
+    Examples:
+
+        .. code-block:: python
+
+            # Imports
+            from langchain.vectorstores import Chroma
+            from langchain.embeddings import OpenAIEmbeddings
+            from langchain.text_splitter import RecursiveCharacterTextSplitter
+            from langchain.storage import InMemoryStore
+
+            # This text splitter is used to create the parent documents
+            parent_splitter = RecursiveCharacterTextSplitter(chunk_size=2000)
+            # This text splitter is used to create the child documents
+            # It should create documents smaller than the parent
+            child_splitter = RecursiveCharacterTextSplitter(chunk_size=400)
+            # The vectorstore to use to index the child chunks
+            vectorstore = Chroma(embedding_function=OpenAIEmbeddings())
+            # The storage layer for the parent documents
+            store = InMemoryStore()
+
+            # Initialize the retriever
+            retriever = ParentDocumentRetriever(
+                vectorstore=vectorstore,
+                docstore=store,
+                child_splitter=child_splitter,
+                parent_splitter=parent_splitter,
+            )
+    """
     class Config:
-        extra = Extra.allow
+        extra = Extra.forbid
         arbitrary_types_allowed = True
 
+    vectorstore: VectorStore
+    """The real vectorstore for saving chunks"""
     docstore: BaseStore[str, Union[Document, List[str]]]
     """The storage layer for the parent documents"""
 
@@ -77,7 +125,7 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                 Returns:
                     List of relevant documents
                 """
-                vectorstore = cast(ParentVectorStore, self.vectorstore)
+                vectorstore = cast(RAGVectorStore, self.vectorstore)
                 sub_docs = vectorstore.similarity_search(query, **self.search_kwargs)
                 return self._get_trunk_from_sub_docs(sub_docs)
 
@@ -89,7 +137,7 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
 
     def add_documents(self, documents: List[Document], *,  # FIXME: lazy ?
                       ids: Optional[List[str]] = None,
-                      add_to_docstore: bool = True, **kwargs: Any) -> List[str]:
+                      **kwargs: Any) -> List[str]:
         """Adds documents to the docstore and vectorstores.
 
         Args:
@@ -99,10 +147,6 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                 are already in the document store and you don't want to re-add
                 to the docstore. If not provided, random UUIDs will be used as
                 ids.
-            add_to_docstore: Boolean of whether to add documents to docstore.
-                This can be false if and only if `ids` are provided. You may want
-                to set this to False if the documents are already in the docstore
-                and you don't want to re-add them.
         """
         chunk_ids = None
         map_doc_ids: Dict[Any, str] = {}
@@ -155,10 +199,6 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
             chunk_ids = [
                 chunk.metadata.get(self.chunk_id_key, str(uuid.uuid4())) for chunk in
                 chunk_documents]
-            if not add_to_docstore:  # FIXME
-                raise ValueError(
-                    "If ids are not passed in, `add_to_docstore` MUST be True"
-                )  # TODO: verifier si pas 2 fois le même id ?
 
         chunk_ids_for_doc: Dict[str, List[str]] = {}
         if self.parent_transformer:
@@ -191,20 +231,18 @@ class ParentVectorStore(BaseModel, WrapperVectorStore):
                 # Prepare the mset in docstore
                 full_chunk_docs.append((chunk_id, chunk_doc))
 
-            if add_to_docstore:
-                # Add the chunks in docstore.
-                # In the retriever, it's this intances to return
-                # in metadata[child_ids_key], it's possible to find the id of all
-                # transformed versions
-                self.docstore.mset(full_chunk_docs)
-                # TODO: voir si pas de add_to_docstore
+            # Add the chunks in docstore.
+            # In the retriever, it's this intances to return
+            # in metadata[child_ids_key], it's possible to find the id of all
+            # transformed versions
+            self.docstore.mset(full_chunk_docs)
 
         if self.parent_transformer:
             # With the *parent* mode, for each parent document,
             # we must save the id of all chunk.
             # Then, it's possible to remove/update all chunk when the parent document
             # was updated.
-            # Save the parent association wih all chunk  FIXME: flag add_to_docstore
+            # Save the parent association wih all chunk
             mset_values: List[Tuple[str, List[str]]] = []
             for parent_id, doc in zip(ids, documents):
                 mset_values.append((parent_id, chunk_ids_for_doc[parent_id]))

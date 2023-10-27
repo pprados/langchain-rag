@@ -7,6 +7,10 @@ from langchain.schema.vectorstore import VectorStore
 VST = TypeVar("VST", bound="VectorStore")
 T = TypeVar("T")
 class WrapperVectorStore(VectorStore):
+    """
+    A generic wrapper for vectorstore.
+    Can be known by SelfQueryRetriever to generate the target request.
+    """
     def __init__(self, *, vectorstore: VectorStore):
         self.vectorstore = vectorstore
 
@@ -186,15 +190,17 @@ class WrapperVectorStore(VectorStore):
         return await cls(vectorstore=vectorstore_cls.afrom_texts(**kwargs))
 
 def _hack():
-    import langchain
-    old_get_builtin_translator = langchain.retrievers.self_query.base._get_builtin_translator
+    from langchain.retrievers.self_query import base as to_patch
+    old_get_builtin_translator = \
+        to_patch._get_builtin_translator
 
-    def patch_translator(vectorstore):
-        print("toto")
-        return old_get_builtin_translator(vectorstore.vector_store) if isinstance(vectorstore, IndexVectorStore) \
-            else old_get_builtin_translator(vectorstore)
+    def patch_get_builtin_translator(vectorstore):
+        if isinstance(vectorstore, WrapperVectorStore):
+            return patch_get_builtin_translator(vectorstore.vectorstore)
+        return old_get_builtin_translator(vectorstore)
 
-    langchain.retrievers.self_query.base._get_builtin_translator = patch_translator
+    to_patch._get_builtin_translator = (
+        patch_get_builtin_translator)
 
 
-# _hack()  # PPR
+_hack()

@@ -1,7 +1,7 @@
-from .parent_vectorstore import ParentVectorStore
+from .rag_vectorstore import RAGVectorStore
 from .wrapper_vectorstore import WrapperVectorStore
 
 __all__ = [
-    "ParentVectorStore",
+    "RAGVectorStore",
     "WrapperVectorStore"
 ]

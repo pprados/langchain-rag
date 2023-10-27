@@ -38,8 +38,7 @@ def _get_default_chain_prompt() -> PromptTemplate:
         partial_variables={"format_instructions": _default_parser.get_format_instructions()}
     )
 
-
-class GenerateQuestions(RunnableGeneratorDocumentTransformer):
+class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
     """Generate questions for each Documents."""
 
     llm_chain: LLMChain
@@ -95,8 +94,10 @@ class GenerateQuestions(RunnableGeneratorDocumentTransformer):
         for i, doc in enumerate(documents):
             if not outputs[i]:
                 continue
+            metadata=copy.deepcopy(doc.metadata)
+            metadata["transformer"] = self.__class__.__name__
             yield Document(page_content=outputs[i],
-                           metadata=copy.deepcopy(doc.metadata))
+                           metadata=metadata)
 
     async def atransform_documents(
             self, documents: Sequence[Document], **kwargs: Any
@@ -122,7 +123,7 @@ class GenerateQuestions(RunnableGeneratorDocumentTransformer):
             get_input: Optional[Callable[[Document], dict]] = None,
             nb_of_questions: int = 3,
             llm_chain_kwargs: Optional[dict] = None,
-    ) -> 'GenerateQuestions':
+    ) -> 'GenerateQuestionsTransformer':
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input

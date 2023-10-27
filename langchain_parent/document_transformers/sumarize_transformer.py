@@ -38,13 +38,8 @@ def _get_default_chain_prompt() -> PromptTemplate:
 class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
     """Generate questions for each Documents."""
 
-    def __init__(
-            self,
-            llm_chain: LLMChain,
-            get_input: Callable[[Document], dict] = _default_get_input,
-    ):
-        self.llm_chain = llm_chain
-        self.get_input = get_input
+    llm_chain: LLMChain
+    get_input: Callable[[Document], dict] = _default_get_input
 
     """LLM wrapper to use for compressing documents."""
 
@@ -64,8 +59,10 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
                 **_input)
             if not output:
                 continue
-            yield Document(page_content=str(output),
-                           metadata=copy.deepcopy(doc.metadata))
+            metadata=copy.deepcopy(doc.metadata)
+            metadata["transformer"] = self.__class__.__name__
+            yield Document(page_content="SUMMARY:\n"+str(output),  # FIXME
+                           metadata=metadata)
 
     def transform_documents(
             self,

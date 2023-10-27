@@ -41,6 +41,7 @@ pytest-socket = "^0.6.0"
 syrupy = "^4.0.2"
 wikipedia = '*'
 chromadb="^0.4.10"
+langchain-qa_with_references = {path = "../langchain-qa_with_references", develop = true}
 
 
 [tool.poetry.group.lint]

@@ -177,10 +177,11 @@ chunk_transformer = DocumentTransformers(
 )
 
 
-def test_add_parent_parentid_no_childid(mocker: MockerFixture):
+def test_parent_chunk(mocker: MockerFixture):
     """
-        Scenario with a parent transformer, who generate chunks without uniq id.
-        The code must inject a uniq id in each chunk.
+    parent_transformer = True
+    chunk_transformer = True
+    ids = No
     """
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -225,13 +226,15 @@ def test_add_parent_parentid_no_childid(mocker: MockerFixture):
     spy_delete.assert_called_with(ids=list({f'Fake-VS-0{i}' for i in range(1, 9)}))
 
 
-def test_add_parent_parentid_childid(mocker: MockerFixture):
+def test_parent_chunk_childid(mocker: MockerFixture):
     """
     Sometime, the result of a parent transformation is a list of documents
     with an uniq id. It's not necessery to inject a new one.
     You can set the name of this id with `chunk_id_key`.
 
-    Scenario with a parent transformer, who generate chunks with uniq id.
+    parent_transformer = True
+    chunk_transformer = True
+    ids = No
     """
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -272,35 +275,11 @@ def test_add_parent_parentid_childid(mocker: MockerFixture):
     spy_delete.assert_called_with(list({f'Fake-VS-0{i}' for i in range(1, 9)}))
 
 
-# def test_add_parent_no_parentid_no_childid(mocker: MockerFixture):
-#     """
-#         Scenario with a parent transformer, who generate chunks without uniq id.
-#         The code must inject a uniq id in each chunk.
-#     """
-#     fake_vs = FakeVectorStore()
-#     docstore = InMemoryStore()
-#     spy_add_texts = mocker.spy(fake_vs, 'add_texts')
-#     mock_uuid4 = mocker.patch("uuid.uuid4")
-#     mock_uuid4.side_effect = FakeUUID("chunk-")
-#
-#     with pytest.raises(ValueError):
-#         vs = ParentVectorStore(
-#             vectorstore=fake_vs,
-#             parent_transformer=parent_transformer,
-#             chunk_transformer=chunk_transformer,
-#             docstore=docstore,
-#             doc_id_key="_id", # Not in the parent
-#         )
-#         doc1 = Document(page_content="Hello word", metadata={"id": 1})
-#         doc2 = Document(page_content="Happy days", metadata={"id": 2})
-#
-#         ids = vs.add_documents([doc1, doc2])
-#
-
-def test_add_parent_force_id(mocker: MockerFixture):
+def test_parent_chunk_ids(mocker: MockerFixture):
     """
-        Scenario with a parent transformer, who generate chunks
-        with uniq id in parameters.
+    parent_transformer = True
+    chunk_transformer = True
+    ids = Yes
     """
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -319,17 +298,64 @@ def test_add_parent_force_id(mocker: MockerFixture):
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    force_ids = [fake_uuid(), fake_uuid()]
 
     # ----
-    force_id = [fake_uuid(), fake_uuid()]
-    ids = vs.add_documents(documents=[doc1, doc2], ids=force_id)
+    ids = vs.add_documents([doc1, doc2],ids=force_ids)
     result = vs.as_retriever().get_relevant_documents(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 4
-    assert ids == force_id
+    assert ids == force_ids
+    spy_add_documents.assert_has_calls(_must_be_called([
+        (['HELLO'],
+         [{'id': 1, 'start_index': 0, 'split_id': '1-0',
+           vs.chunk_id_key: 'chunk-01'}, ]),
+        ([' WORD'],
+         [{'id': 1, 'start_index': 5, 'split_id': '1-5', vs.chunk_id_key: 'chunk-02'}]),
+        (['HAPPY'],
+         [{'id': 2, 'start_index': 0, 'split_id': '2-0', vs.chunk_id_key: 'chunk-03'}]),
+        ([' DAYS'],
+         [{'id': 2, 'start_index': 5, 'split_id': '2-5', vs.chunk_id_key: 'chunk-04'}])
+    ]))
+    spy_delete.assert_called_with(ids=list({f'Fake-VS-0{i}' for i in range(1, 9)}))
+
+def test_parent_ids(mocker: MockerFixture):
+    """
+    parent_transformer = True
+    chunk_transformer = False
+    ids = Yes
+    """
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_add_documents = mocker.spy(fake_vs, 'add_documents')
+    spy_delete = mocker.spy(fake_vs, 'delete')
+    mock_uuid4 = mocker.patch("uuid.uuid4")
+    mock_uuid4.side_effect = FakeUUID("chunk-")
+
+    fake_uuid = FakeUUID(prefix="persistance-")
+    vs = ParentVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=None,
+        docstore=docstore,
+        doc_id_key="id",
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+
+    # ----
+    force_ids = [fake_uuid(), fake_uuid()]
+    ids = vs.add_documents(documents=[doc1, doc2], ids=force_ids)
+    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
+    vs.delete(ids)
+    # ----
+    assert result[0].page_content == "Hello"
+    assert result[1].page_content == " word"
+    assert spy_add_documents.call_count == 4
+    assert ids == force_ids
     spy_add_documents.assert_has_calls(_must_be_called([
         (['HELLO'],
          [{'id': 1, 'start_index': 0, 'split_id': '1-0', vs.chunk_id_key: 'chunk-01'}]),
@@ -344,10 +370,11 @@ def test_add_parent_force_id(mocker: MockerFixture):
 
 
 # %%
-def test_add_no_parent(mocker: MockerFixture):
+def test_chunk(mocker: MockerFixture):
     """
-        Scenario without a parent transformer, who manage onlty the chunks
-        without uniq id. The code must inject a uniq id in each chunk.
+    parent_transformer = False
+    chunk_transformer = True
+    ids = No
     """
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -367,11 +394,6 @@ def test_add_no_parent(mocker: MockerFixture):
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     split_docs = parent_transformer.split_documents([doc1, doc2])
     # ----
-
-    # RunnableGenerator(
-    #     transform=partial(_transform_documents_generator,
-    #                       transformers=self.transformers)
-    # ).transform([doc1])
 
     ids = vs.add_documents(documents=split_docs)
     result = vs.as_retriever().get_relevant_documents(doc1.page_content)
@@ -393,10 +415,11 @@ def test_add_no_parent(mocker: MockerFixture):
     spy_delete.assert_called_with(list({f'Fake-VS-0{i}' for i in range(1, 9)}))
 
 
-def test_add_no_parent_force_id(mocker: MockerFixture):
+def test_chunk_ids(mocker: MockerFixture):
     """
-        Scenario without a parent transformer, who manage only the chunks
-        with uniq id in parameters. The code must inject a uniq id in each chunk.
+    parent_transformer = False
+    chunk_transformer = True
+    ids = Yes
     """
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -416,16 +439,16 @@ def test_add_no_parent_force_id(mocker: MockerFixture):
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     split_docs = parent_transformer.split_documents([doc1, doc2])
-    force_id = [fake_uuid() for _ in range(0, len(split_docs))]
+    force_ids = [fake_uuid() for _ in range(0, len(split_docs))]
     # ----
-    ids = vs.add_documents(documents=split_docs, ids=force_id)
+    ids = vs.add_documents(documents=split_docs, ids=force_ids)
     result = vs.as_retriever().get_relevant_documents(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 4
-    assert ids == force_id
+    assert ids == force_ids
     spy_add_documents.assert_has_calls(_must_be_called([
         (['HELLO'],
          [{'id': 1, 'start_index': 0, 'split_id': '1-0',
@@ -444,10 +467,11 @@ def test_add_no_parent_force_id(mocker: MockerFixture):
 
 
 # %%
-def test_add_parent_and_child(mocker: MockerFixture):
+def test_parent(mocker: MockerFixture):
     """
-        Scenario without a parent transformer, who manage onlty the chunks
-        without uniq id. The code must inject a uniq id in each chunk.
+    parent_transformer = True
+    chunk_transformer = False
+    ids = No
     """
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -501,10 +525,11 @@ def test_add_parent_and_child(mocker: MockerFixture):
     spy_delete.assert_called_with(ids=[f'chunk-0{i}' for i in range(1, 5)])
 
 
-def test_add_parent_and_child_force_id(mocker: MockerFixture):
+def test_parent_ids(mocker: MockerFixture):
     """
-        Scenario without a parent transformer, who manage only the chunks
-        with uniq id in parameters. The code must inject a uniq id in each chunk.
+    parent_transformer = True
+    chunk_transformer = False
+    ids = Yes
     """
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -524,16 +549,16 @@ def test_add_parent_and_child_force_id(mocker: MockerFixture):
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     docs = [doc1, doc2]
-    force_id = [fake_uuid() for _ in range(0, len(docs))]
+    force_ids = [fake_uuid() for _ in range(0, len(docs))]
     # ----
-    ids = vs.add_documents(documents=docs, ids=force_id)
+    ids = vs.add_documents(documents=docs, ids=force_ids)
     result = vs.as_retriever().get_relevant_documents(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 1
-    assert ids == force_id
+    assert ids == force_ids
     spy_add_documents.assert_has_calls(
         [
             call(
@@ -559,10 +584,11 @@ def test_add_parent_and_child_force_id(mocker: MockerFixture):
 
 
 # %%
-def test_add_no_parent_and_child(mocker: MockerFixture):
+def test_nothing(mocker: MockerFixture):
     """
-        Scenario without a parent transformer, who manage onlty the chunks
-        without uniq id. The code must inject a uniq id in each chunk.
+    parent_transformer = False
+    chunk_transformer = False
+    ids = No
     """
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -619,10 +645,11 @@ def test_add_no_parent_and_child(mocker: MockerFixture):
     spy_delete.assert_called_with(ids=[f'chunk-0{i}' for i in range(1, 5)])
 
 
-def test_add_no_parent_and_child_force_id(mocker: MockerFixture):
+def test_nothing_ids(mocker: MockerFixture):
     """
-        Scenario without a parent transformer, who manage only the chunks
-        with uniq id in parameters. The code must inject a uniq id in each chunk.
+    parent_transformer = False
+    chunk_transformer = False
+    ids = yes
     """
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -642,16 +669,16 @@ def test_add_no_parent_and_child_force_id(mocker: MockerFixture):
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     split_docs = parent_transformer.split_documents([doc1, doc2])
-    force_id = [fake_uuid() for _ in range(0, len(split_docs))]
+    force_ids = [fake_uuid() for _ in range(0, len(split_docs))]
     # ----
-    ids = vs.add_documents(documents=split_docs, ids=force_id)
+    ids = vs.add_documents(documents=split_docs, ids=force_ids)
     result = vs.as_retriever().get_relevant_documents(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 1
-    assert ids == force_id
+    assert ids == force_ids
     spy_add_documents.assert_has_calls(
         [
             call(

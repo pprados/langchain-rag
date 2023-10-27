@@ -13,7 +13,7 @@ from langchain_parent.document_transformers import RunnableDocumentTransformer
 from langchain_parent.document_transformers.runnable_document_transformer import \
     RunnableGeneratorDocumentTransformer
 
-from .generate_questions import GenerateQuestions
+from .generate_questions import GenerateQuestionsTransformer
 
 
 def _default_get_input(doc: Document) -> Dict[str, Any]:
@@ -70,8 +70,10 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
                 continue
             yield Document(page_content=output.summary, metadata=doc.metadata)
             for q in output.questions:
+                metadata = copy.deepcopy(doc.metadata)
+                metadata["transformer"] = self.__class__.__name__
                 yield Document(page_content=q,
-                               metadata=copy.deepcopy(doc.metadata))
+                               metadata=metadata)
 
     @classmethod
     def from_llm(
