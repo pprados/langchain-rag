@@ -209,8 +209,8 @@ def test_parent_chunk(mocker: MockerFixture):
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 4
     assert ids == [
-        hashlib.sha256(str(doc1.metadata[vs.doc_id_key]).encode("utf-8")).hexdigest(),
-        hashlib.sha256(str(doc2.metadata[vs.doc_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(str(doc1.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(str(doc2.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
     ]
     spy_add_documents.assert_has_calls(_must_be_called([
         (['HELLO'],
@@ -263,8 +263,8 @@ def test_parent_chunk_childid(mocker: MockerFixture):
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 4
     assert ids == [
-        hashlib.sha256(str(doc1.metadata[vs.doc_id_key]).encode("utf-8")).hexdigest(),
-        hashlib.sha256(str(doc2.metadata[vs.doc_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(str(doc1.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(str(doc2.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
     ]
     spy_add_documents.assert_has_calls(_must_be_called([
         (['HELLO'], [{'id': 1, 'start_index': 0, 'split_id': '1-0', }]),
@@ -498,8 +498,8 @@ def test_parent(mocker: MockerFixture):
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 1
     assert ids == [
-        hashlib.sha256(str(doc1.metadata[vs.doc_id_key]).encode("utf-8")).hexdigest(),
-        hashlib.sha256(str(doc2.metadata[vs.doc_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(str(doc1.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(str(doc2.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
     ]
     spy_add_documents.assert_has_calls(
         [
