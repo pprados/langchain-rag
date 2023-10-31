@@ -42,7 +42,7 @@ syrupy = "^4.0.2"
 wikipedia = '*'
 chromadb="^0.4.10"
 langchain-qa_with_references = {path = "../langchain-qa_with_references", develop = true}
-
+aiosqlite="*"
 
 [tool.poetry.group.lint]
 optional = true

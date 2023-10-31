@@ -1,7 +1,7 @@
-from typing import Sequence, Optional, Any, Iterator
+from typing import Sequence, Optional, Any, Iterator, Union, Callable, Mapping
 
 from langchain.schema import Document, BaseDocumentTransformer
-from langchain.schema.runnable import RunnableSerializable, RunnableConfig
+from langchain.schema.runnable import RunnableSerializable, RunnableConfig, Runnable
 from .document_transformer import GeneratorBaseDocumentTransformer
 
 

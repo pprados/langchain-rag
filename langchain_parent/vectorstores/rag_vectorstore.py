@@ -456,6 +456,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     def from_vs_in_sql(
             vectorstore: VectorStore,
             db_url: str,
+            namespace:str="rag_vectorstore",
             *,
             chunk_transformer: Optional[BaseDocumentTransformer] = None,
             parent_transformer: Optional[BaseDocumentTransformer] = None,
@@ -466,11 +467,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         from ..docstore.sql_docstore import SQLStore
 
         record_manager = SQLRecordManager(
-            namespace="record_manager_cache",
+            namespace=namespace,
             db_url=db_url
         )
         record_manager.create_schema()
         docstore = SQLStore(
+            namespace=namespace,
             db_url=db_url,
         )
         docstore.create_schema()

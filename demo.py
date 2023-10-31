@@ -5,10 +5,14 @@ import tempfile
 import langchain
 from dotenv import load_dotenv
 from langchain.cache import SQLiteCache
+from langchain.chains.query_constructor.schema import AttributeInfo
 from langchain.embeddings import CacheBackedEmbeddings, OpenAIEmbeddings
 from langchain.indexes import index
 from langchain.llms.openai import OpenAI
-from langchain.retrievers import WikipediaRetriever
+from langchain.retrievers import WikipediaRetriever, MergerRetriever, \
+    SelfQueryRetriever, MultiQueryRetriever, ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import DocumentCompressorPipeline, \
+    EmbeddingsFilter, CohereRerank
 from langchain.storage import LocalFileStore
 from langchain.text_splitter import TokenTextSplitter
 from langchain.vectorstores.chroma import Chroma
@@ -186,7 +190,9 @@ else:
     CALLBACKS = []
 # %% Use the RAG
 query = "What is the difference between pure and applied mathematics?"
-chain = RetrievalQAWithReferencesAndVerbatimsChain.from_chain_type(
+from langchain.chains.qa_with_sources.retrieval import RetrievalQAWithSourcesChain
+# chain = RetrievalQAWithReferencesAndVerbatimsChain.from_chain_type(
+chain = RetrievalQAWithSourcesChain.from_chain_type(
     llm=llm,
     chain_type="map_reduce",
     retriever=vectorstore.as_retriever(),
