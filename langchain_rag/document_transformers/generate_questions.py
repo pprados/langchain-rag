@@ -6,10 +6,10 @@ from typing import Callable, Sequence, Optional, Dict, Any, Generator, cast
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
 from langchain.prompts import PromptTemplate
-from langchain.schema import Document, BaseDocumentTransformer
+from langchain.schema import Document
 from langchain.schema.language_model import BaseLanguageModel
-from langchain_parent.document_transformers import RunnableDocumentTransformer
-from langchain_parent.document_transformers.runnable_document_transformer import \
+
+from langchain_rag.document_transformers.runnable_document_transformer import \
     RunnableGeneratorDocumentTransformer
 
 
@@ -35,8 +35,10 @@ def _get_default_chain_prompt() -> PromptTemplate:
     return PromptTemplate.from_template(
         template=_default_template,
         output_parser=_default_parser,
-        partial_variables={"format_instructions": _default_parser.get_format_instructions()}
+        partial_variables={
+            "format_instructions": _default_parser.get_format_instructions()}
     )
+
 
 class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
     """Generate questions for each Documents."""
@@ -44,7 +46,6 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
     llm_chain: LLMChain
     get_input: Callable[[Document], dict] = _default_get_input
     nb_of_questions: int = 3
-
 
     """Callable for constructing the chain input from the query and a Document."""
 
@@ -58,7 +59,7 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
         for doc in documents:
             _input = {**self.get_input(doc),
                       **{"nb_of_questions": self.nb_of_questions}}
-            output = cast(Sequence[str],self.llm_chain.predict_and_parse(
+            output = cast(Sequence[str], self.llm_chain.predict(
                 callbacks=_callbacks,
                 **_input))
             if not output:
@@ -84,7 +85,7 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
         _callbacks = kwargs.get("callbacks", None)
         outputs = await asyncio.gather(
             *[
-                self.llm_chain.apredict_and_parse(
+                self.llm_chain.apredict(
                     **self.get_input(documents),
                     callbacks=_callbacks
                 )
@@ -94,7 +95,7 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
         for i, doc in enumerate(documents):
             if not outputs[i]:
                 continue
-            metadata=copy.deepcopy(doc.metadata)
+            metadata = copy.deepcopy(doc.metadata)
             metadata["transformer"] = self.__class__.__name__
             yield Document(page_content=outputs[i],
                            metadata=metadata)
@@ -127,7 +128,10 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
-        llm_chain = LLMChain(llm=llm, prompt=_prompt, **(llm_chain_kwargs or {}))
+        llm_chain = LLMChain(llm=llm,
+                             prompt=_prompt,
+                             output_parser=_prompt.output_parser,
+                             **(llm_chain_kwargs or {}))
         return cls(llm_chain=llm_chain,
                    get_input=_get_input,
                    nb_of_questions=nb_of_questions)

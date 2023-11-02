@@ -9,8 +9,8 @@ from langchain.prompts import PromptTemplate
 from langchain.schema import Document, BaseDocumentTransformer
 from langchain.schema.language_model import BaseLanguageModel
 from langchain.pydantic_v1 import BaseModel
-from langchain_parent.document_transformers import RunnableDocumentTransformer
-from langchain_parent.document_transformers.runnable_document_transformer import \
+from langchain_rag.document_transformers import RunnableDocumentTransformer
+from langchain_rag.document_transformers.runnable_document_transformer import \
     RunnableGeneratorDocumentTransformer
 
 from .generate_questions import GenerateQuestionsTransformer
@@ -61,7 +61,7 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
         _callbacks = kwargs.get("callbacks", None)
         for doc in documents:
             _input = self.get_input(doc)
-            output = cast(SummarizeAndQuestions,self.llm_chain.predict_and_parse(
+            output = cast(SummarizeAndQuestions,self.llm_chain.predict(
                 callbacks=_callbacks,
                 **{**self.get_input(doc),
                         **{"nb_of_questions": self.nb_of_questions}}
@@ -87,7 +87,11 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
-        llm_chain = LLMChain(llm=llm, prompt=_prompt, **(llm_chain_kwargs or {}))
+        llm_chain = LLMChain(
+            llm=llm,
+            prompt=_prompt,
+            output_parser=_prompt.output_parser,
+            **(llm_chain_kwargs or {}))
         return cls(llm_chain=llm_chain,
                    get_input=_get_input,
                    nb_of_questions=nb_of_questions)

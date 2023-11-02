@@ -8,7 +8,7 @@ from langchain.output_parsers import NumberedListOutputParser
 from langchain.prompts import PromptTemplate
 from langchain.schema import Document
 from langchain.schema.language_model import BaseLanguageModel
-from langchain_parent.document_transformers.runnable_document_transformer import \
+from langchain_rag.document_transformers.runnable_document_transformer import \
     RunnableGeneratorDocumentTransformer
 
 
@@ -54,7 +54,7 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
         _callbacks = kwargs.get("callbacks", None)
         for doc in documents:
             _input = self.get_input(doc)
-            output = self.llm_chain.predict_and_parse(
+            output = self.llm_chain.predict(
                 callbacks=_callbacks,
                 **_input)
             if not output:
@@ -82,7 +82,7 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
         _callbacks = kwargs.get("callbacks", None)
         outputs = await asyncio.gather(
             *[
-                self.llm_chain.apredict_and_parse(
+                self.llm_chain.apredict(
                     **self.get_input(documents),
                     callbacks=_callbacks
                 )
@@ -122,6 +122,9 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
-        llm_chain = LLMChain(llm=llm, prompt=_prompt, **(llm_chain_kwargs or {}))
+        llm_chain = LLMChain(
+            llm=llm,
+            prompt=_prompt, **(llm_chain_kwargs or {}),
+        )
         return cls(llm_chain=llm_chain,
                    get_input=_get_input)

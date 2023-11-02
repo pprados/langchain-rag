@@ -1,6 +1,5 @@
 import hashlib
 import uuid
-from pathlib import Path
 from typing import Any, List, Optional, Type, TypeVar, cast, Tuple, Dict, Union, \
     Container
 
@@ -100,13 +99,50 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     """The transformer to use to create parent documents.
     If none, then the parent documents will be the raw documents passed in."""
 
-    def _get_trunk_from_sub_docs(self, sub_docs: List[Document]) -> List[Document]:
+    def _get_trunk_from_sub_docs(self,
+                                 sub_docs: List[Document],
+                                 **kwargs: Dict[str, Any]) -> List[Document]:
+        if self.chunk_transformer:
+            ids = []
+            for d in sub_docs:
+                if d.metadata[self.chunk_id_key] not in ids:
+                    ids.append(d.metadata[self.chunk_id_key])
+            docs = self.docstore.mget(ids)
+            result = [d for d in docs if d is not None]
+        else:
+            result = sub_docs
+        if "k" in kwargs:
+            return result[:kwargs["k"]]
+        else:
+            return result
+
+    def _update_score_of_chunk(self,
+                               sub_chunks_and_score: List[Tuple[Document, float]]):
         ids = []
-        for d in sub_docs:
+        scores = {}
+        for d, s in sub_chunks_and_score:
             if d.metadata[self.chunk_id_key] not in ids:
-                ids.append(d.metadata[self.chunk_id_key])
+                chunk_id = d.metadata[self.chunk_id_key]
+                ids.append(chunk_id)
+                chunk_s = scores.get(chunk_id, -1.0)
+                scores[chunk_id] = max(chunk_s, s)
         docs = self.docstore.mget(ids)
-        return [d for d in docs if d is not None]
+        map_ids = {doc.metadata[self.source_id_key]: i for doc, i in zip(docs, ids)}
+        return [(d, scores[map_ids[d.metadata[self.source_id_key]]]) for d in docs if
+                d is not None]
+
+    def _get_trunk_from_sub_docs_and_score(
+            self,
+            sub_docs_and_score: List[Tuple[Document, float]],
+            **kwargs: Dict[str, Any]) -> List[Tuple[Document, float]]:
+        if self.chunk_transformer:
+            result = self._update_score_of_chunk(sub_docs_and_score)
+        else:
+            result = sub_docs_and_score
+        if "k" in kwargs:
+            return result[:kwargs["k"]]
+        else:
+            return result
 
     def as_retriever(self, **kwargs: Any) -> VectorStoreRetriever:
         if not self.chunk_transformer:
@@ -128,7 +164,10 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     List of relevant documents
                 """
                 vectorstore = cast(RAGVectorStore, self.vectorstore)
-                sub_docs = vectorstore.similarity_search(query, **self.search_kwargs)
+                sub_docs = vectorstore.search(
+                    query,
+                    search_type=self.search_type,
+                    **self.search_kwargs)
                 return self._get_trunk_from_sub_docs(sub_docs)
 
         return ParentVectorRetriever(
@@ -178,9 +217,11 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                             str(doc_id).encode("utf-8")).hexdigest()
                         ids.append(hash_id)
                         map_doc_ids[doc_id] = hash_id
-
+            self.delete(ids=map_doc_ids.values())
         else:
             chunk_ids = ids
+            if chunk_ids:
+                self.delete(ids=chunk_ids)
             ids = None
 
         if self.parent_transformer:
@@ -266,9 +307,15 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     "ids must be set"
                 )
             lists_of_chunk_by_doc_ids = cast(List[List[str]], self.docstore.mget(ids))
-            chunk_by_doc_ids = [id for l in lists_of_chunk_by_doc_ids for id in l]
+            chunk_by_doc_ids = []
+            for l in lists_of_chunk_by_doc_ids:
+                if l:
+                    chunk_by_doc_ids.extend([id for id in l])
         else:
             chunk_by_doc_ids = ids
+
+        if not any(chunk_by_doc_ids):
+            return False
 
         transformed_ids = set()
         if self.chunk_transformer:
@@ -304,10 +351,20 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         raise NotImplementedError("from_texts not implemented")
 
     # %% FIXME
+    def _trunk_k(self, result: List[Document], kwargs: Dict[str, Any]) -> List[
+        Document]:
+        if "k" in kwargs:
+            return result[:kwargs["k"]]
+        else:
+            return result
+
     def search(self, query: str, search_type: str, **kwargs: Any) -> List[Document]:
-        subdocs = self.vectorstore.search(query=query, search_type=search_type,
-                                          **kwargs)
-        return self._get_trunk_from_sub_docs(subdocs)
+        _search_kwargs = {**kwargs, **self.search_kwargs}
+        subdocs = self.vectorstore.search(
+            query=query,
+            search_type=search_type,
+            **_search_kwargs)
+        return self._get_trunk_from_sub_docs(subdocs, **kwargs)
 
     async def asearch(
             self, query: str, search_type: str, **kwargs: Any
@@ -319,16 +376,35 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     def similarity_search(
             self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
-        subdocs = self.vectorstore.similarity_search(query=query, k=k, **kwargs)
-        return self._get_trunk_from_sub_docs(subdocs)
+        return self.search(query=query,
+                           search_type="similarity",
+                           k=k,
+                           **kwargs)
+
+    async def asimilarity_search(
+            self, query: str, k: int = 4, **kwargs: Any
+    ) -> List[Document]:
+        return await self.search(query=query,
+                                 search_type="similarity",
+                                 k=k,
+                                 **kwargs)
 
     def similarity_search_with_score(
+            self,
+            query: str,
+            k: int = 4,
+            **kwargs: Any
+    ) -> List[Tuple[Document, float]]:
+        _search_kwargs = {**kwargs, **self.search_kwargs}
+        subdocs_and_score = self.vectorstore.similarity_search_with_score(
+            query=query,
+            **_search_kwargs)
+        return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
+
+    async def asimilarity_search_with_score(
             self, *args: Any, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
-        subdocs_and_score = self.vectorstore.similarity_search_with_score(*args,
-                                                                          **kwargs)
-        # FIXME: et faire les async
-        return self._get_trunk_from_sub_docs(subdocs_and_score)
+        raise NotImplementedError("Not yet")
 
     def similarity_search_with_relevance_scores(
             self,
@@ -336,24 +412,22 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             k: int = 4,
             **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
-        subdocs = self.vectorstore.similarity_search_with_relevance_scores(
-            query=query, k=k, **kwargs
+        _search_kwargs = {**kwargs, **self.search_kwargs}
+        subdocs_and_score = self.vectorstore.similarity_search_with_relevance_scores(
+            query=query,
+            **_search_kwargs
         )
-        return self._get_trunk_from_sub_docs(subdocs)
+        return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
 
     async def asimilarity_search_with_relevance_scores(
             self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
-        subdocs = await self.vectorstore.asimilarity_search_with_relevance_scores(
-            query=query, k=k, **kwargs
-        )
-        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async
-
-    async def asimilarity_search(
-            self, query: str, k: int = 4, **kwargs: Any
-    ) -> List[Document]:
-        subdocs = await self.vectorstore.asimilarity_search(query=query, k=k, **kwargs)
-        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async
+        # _search_kwargs = {**kwargs, **self.search_kwargs}
+        # subdocs_and_score = await self.vectorstore.asimilarity_search_with_relevance_scores(
+        #     query=query, _search_kwargs
+        # )
+        # return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, **kwargs)
+        raise NotImplementedError("Not yet")
 
     def similarity_search_by_vector(
             self, embedding: List[float], k: int = 4, **kwargs: Any
@@ -361,7 +435,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs = self.vectorstore.similarity_search_by_vector(
             embedding=embedding, k=k, **kwargs
         )
-        return self._get_trunk_from_sub_docs(subdocs)
+        return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     async def asimilarity_search_by_vector(
             self, embedding: List[float], k: int = 4, **kwargs: Any
@@ -369,7 +443,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs = await self.vectorstore.asimilarity_search_by_vector(
             embedding=embedding, k=k, **kwargs
         )
-        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async
+        return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     def max_marginal_relevance_search(
             self,
@@ -382,7 +456,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs = self.vectorstore.max_marginal_relevance_search(
             query=query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
-        return self._get_trunk_from_sub_docs(subdocs)
+        return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     async def amax_marginal_relevance_search(
             self,
@@ -395,7 +469,9 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs = await self.vectorstore.amax_marginal_relevance_search(
             query=query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
-        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async
+        return self._get_trunk_from_sub_docs(subdocs,
+                                             k=k,
+                                             )
 
     def max_marginal_relevance_search_by_vector(
             self,
@@ -408,7 +484,8 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs = self.vectorstore.max_marginal_relevance_search_by_vector(
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
-        return self._get_trunk_from_sub_docs(subdocs)
+        return self._get_trunk_from_sub_docs(subdocs,
+                                             k=k)
 
     async def amax_marginal_relevance_search_by_vector(
             self,
@@ -456,7 +533,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     def from_vs_in_sql(
             vectorstore: VectorStore,
             db_url: str,
-            namespace:str="rag_vectorstore",
+            namespace: str = "rag_vectorstore",
             *,
             chunk_transformer: Optional[BaseDocumentTransformer] = None,
             parent_transformer: Optional[BaseDocumentTransformer] = None,
@@ -464,7 +541,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             **kwargs
     ) -> Tuple['RAGVectorStore', Dict[str, Any]]:
         from langchain.indexes import SQLRecordManager
-        from ..docstore.sql_docstore import SQLStore
+        from ..storage import SQLStore
 
         record_manager = SQLRecordManager(
             namespace=namespace,

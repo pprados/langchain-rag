@@ -4,6 +4,7 @@ import hashlib
 from typing import Iterable, Optional, List, Any, Type, Iterator, Dict, Tuple
 from unittest.mock import call
 
+import pytest
 from langchain.schema import Document
 from langchain.schema.embeddings import Embeddings
 from langchain.schema.vectorstore import VectorStore, VST
@@ -11,10 +12,10 @@ from langchain.storage import InMemoryStore
 from langchain.text_splitter import TokenTextSplitter
 from pytest_mock import MockerFixture
 
-from langchain_parent.document_transformers import DocumentTransformers
-from langchain_parent.document_transformers.runnable_document_transformer import \
+from langchain_rag.document_transformers import DocumentTransformers
+from langchain_rag.document_transformers.runnable_document_transformer import \
     RunnableGeneratorDocumentTransformer
-from langchain_parent.vectorstores import ParentVectorStore
+from langchain_rag.vectorstores import RAGVectorStore
 
 
 class FakeUUID:
@@ -72,12 +73,29 @@ class FakeVectorStore(VectorStore):
     def similarity_search(
             self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
-        result = []
+        result = {}  # Identity set
         for word in query.split(" "):
             word = word.lower()
             if word in self.docs:
-                result.extend(self.docs[word])
-        return result
+                for doc in self.docs[word]:
+                    result[id(doc)] = doc
+        return list(result.values())
+
+    def similarity_search_with_score(
+            self, query: str, k: int = 4, **kwargs: Any
+    ) -> List[Tuple[Document, float]]:
+        docs = self.similarity_search(query=query, k=k)
+        l = len(docs)
+        c = 1 / l
+        return [(doc, (l - i) * c) for i, doc in enumerate(docs)]
+
+    def similarity_search_with_relevance_scores(
+            self, query: str, k: int = 4, **kwargs: Any
+    ) -> List[Tuple[Document, float]]:
+        docs = self.similarity_search(query=query, k=k)
+        l = len(docs)
+        c = 1 / l
+        return [(doc, (l - i) * c) for i, doc in enumerate(docs)]
 
     @classmethod
     def from_texts(
@@ -176,8 +194,9 @@ chunk_transformer = DocumentTransformers(
     ]
 )
 
+# %% parent_and_chunk_transformer
 
-def test_parent_chunk(mocker: MockerFixture):
+def test_parent_and_chunk_transformer(mocker: MockerFixture):
     """
     parent_transformer = True
     chunk_transformer = True
@@ -190,12 +209,12 @@ def test_parent_chunk(mocker: MockerFixture):
     mock_uuid4 = mocker.patch("uuid.uuid4")
     mock_uuid4.side_effect = FakeUUID("chunk-")
 
-    vs = ParentVectorStore(
+    vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=parent_transformer,
         chunk_transformer=chunk_transformer,
         docstore=docstore,
-        doc_id_key="id",
+        source_id_key="id",
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
@@ -209,8 +228,10 @@ def test_parent_chunk(mocker: MockerFixture):
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 4
     assert ids == [
-        hashlib.sha256(str(doc1.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
-        hashlib.sha256(str(doc2.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(
+            str(doc1.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(
+            str(doc2.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
     ]
     spy_add_documents.assert_has_calls(_must_be_called([
         (['HELLO'],
@@ -226,7 +247,7 @@ def test_parent_chunk(mocker: MockerFixture):
     spy_delete.assert_called_with(ids=list({f'Fake-VS-0{i}' for i in range(1, 9)}))
 
 
-def test_parent_chunk_childid(mocker: MockerFixture):
+def test_parent_and_chunk_tranformer_childid(mocker: MockerFixture):
     """
     Sometime, the result of a parent transformation is a list of documents
     with an uniq id. It's not necessery to inject a new one.
@@ -243,12 +264,12 @@ def test_parent_chunk_childid(mocker: MockerFixture):
     mock_uuid4 = mocker.patch("uuid.uuid4")
     mock_uuid4.side_effect = FakeUUID("chunk-")
 
-    vs = ParentVectorStore(
+    vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=parent_transformer,
         chunk_transformer=chunk_transformer,
         docstore=docstore,
-        doc_id_key="id",
+        source_id_key="id",
         chunk_id_key='split_id',
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
@@ -263,8 +284,10 @@ def test_parent_chunk_childid(mocker: MockerFixture):
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 4
     assert ids == [
-        hashlib.sha256(str(doc1.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
-        hashlib.sha256(str(doc2.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(
+            str(doc1.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(
+            str(doc2.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
     ]
     spy_add_documents.assert_has_calls(_must_be_called([
         (['HELLO'], [{'id': 1, 'start_index': 0, 'split_id': '1-0', }]),
@@ -275,7 +298,7 @@ def test_parent_chunk_childid(mocker: MockerFixture):
     spy_delete.assert_called_with(list({f'Fake-VS-0{i}' for i in range(1, 9)}))
 
 
-def test_parent_chunk_ids(mocker: MockerFixture):
+def test_parent_and_chunk_transformer_ids(mocker: MockerFixture):
     """
     parent_transformer = True
     chunk_transformer = True
@@ -289,19 +312,19 @@ def test_parent_chunk_ids(mocker: MockerFixture):
     mock_uuid4.side_effect = FakeUUID("chunk-")
 
     fake_uuid = FakeUUID(prefix="persistance-")
-    vs = ParentVectorStore(
+    vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=parent_transformer,
         chunk_transformer=chunk_transformer,
         docstore=docstore,
-        doc_id_key="id",
+        source_id_key="id",
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     force_ids = [fake_uuid(), fake_uuid()]
 
     # ----
-    ids = vs.add_documents([doc1, doc2],ids=force_ids)
+    ids = vs.add_documents([doc1, doc2], ids=force_ids)
     result = vs.as_retriever().get_relevant_documents(doc1.page_content)
     vs.delete(ids)
     # ----
@@ -322,55 +345,9 @@ def test_parent_chunk_ids(mocker: MockerFixture):
     ]))
     spy_delete.assert_called_with(ids=list({f'Fake-VS-0{i}' for i in range(1, 9)}))
 
-def test_parent_ids(mocker: MockerFixture):
-    """
-    parent_transformer = True
-    chunk_transformer = False
-    ids = Yes
-    """
-    fake_vs = FakeVectorStore()
-    docstore = InMemoryStore()
-    spy_add_documents = mocker.spy(fake_vs, 'add_documents')
-    spy_delete = mocker.spy(fake_vs, 'delete')
-    mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
 
-    fake_uuid = FakeUUID(prefix="persistance-")
-    vs = ParentVectorStore(
-        vectorstore=fake_vs,
-        parent_transformer=parent_transformer,
-        chunk_transformer=None,
-        docstore=docstore,
-        doc_id_key="id",
-    )
-    doc1 = Document(page_content="Hello word", metadata={"id": 1})
-    doc2 = Document(page_content="Happy days", metadata={"id": 2})
-
-    # ----
-    force_ids = [fake_uuid(), fake_uuid()]
-    ids = vs.add_documents(documents=[doc1, doc2], ids=force_ids)
-    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
-    vs.delete(ids)
-    # ----
-    assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
-    assert spy_add_documents.call_count == 4
-    assert ids == force_ids
-    spy_add_documents.assert_has_calls(_must_be_called([
-        (['HELLO'],
-         [{'id': 1, 'start_index': 0, 'split_id': '1-0', vs.chunk_id_key: 'chunk-01'}]),
-        ([' WORD'],
-         [{'id': 1, 'start_index': 5, 'split_id': '1-5', vs.chunk_id_key: 'chunk-02'}]),
-        (['HAPPY'],
-         [{'id': 2, 'start_index': 0, 'split_id': '2-0', vs.chunk_id_key: 'chunk-03'}]),
-        ([' DAYS'],
-         [{'id': 2, 'start_index': 5, 'split_id': '2-5', vs.chunk_id_key: 'chunk-04'}])
-    ]))
-    spy_delete.assert_called_with(list({f'Fake-VS-0{i}' for i in range(1, 9)}))
-
-
-# %%
-def test_chunk(mocker: MockerFixture):
+# %% chunk_transformer
+def test_chunk_transformer(mocker: MockerFixture):
     """
     parent_transformer = False
     chunk_transformer = True
@@ -383,12 +360,12 @@ def test_chunk(mocker: MockerFixture):
     mock_uuid4 = mocker.patch("uuid.uuid4")
     mock_uuid4.side_effect = FakeUUID("chunk-")
 
-    vs = ParentVectorStore(
+    vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,  # No parent transformer.
         chunk_transformer=chunk_transformer,
         docstore=docstore,
-        doc_id_key="id",
+        source_id_key="id",
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
@@ -415,7 +392,7 @@ def test_chunk(mocker: MockerFixture):
     spy_delete.assert_called_with(list({f'Fake-VS-0{i}' for i in range(1, 9)}))
 
 
-def test_chunk_ids(mocker: MockerFixture):
+def test_chunk_transformer_ids(mocker: MockerFixture):
     """
     parent_transformer = False
     chunk_transformer = True
@@ -429,12 +406,12 @@ def test_chunk_ids(mocker: MockerFixture):
     mock_uuid4.side_effect = FakeUUID("chunk-")
 
     fake_uuid = FakeUUID(prefix="persistance-")
-    vs = ParentVectorStore(
+    vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,  # No parent transformer.
         chunk_transformer=chunk_transformer,
         docstore=docstore,
-        doc_id_key="id",
+        source_id_key="id",
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
@@ -466,8 +443,8 @@ def test_chunk_ids(mocker: MockerFixture):
     spy_delete.assert_called_with(list({f'Fake-VS-0{i}' for i in range(1, 9)}))
 
 
-# %%
-def test_parent(mocker: MockerFixture):
+# %% parent_transformer
+def test_parent_transformer(mocker: MockerFixture):
     """
     parent_transformer = True
     chunk_transformer = False
@@ -480,12 +457,12 @@ def test_parent(mocker: MockerFixture):
     mock_uuid4 = mocker.patch("uuid.uuid4")
     mock_uuid4.side_effect = FakeUUID("chunk-")
 
-    vs = ParentVectorStore(
+    vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=parent_transformer,
         chunk_transformer=None,  # No child transformer
         docstore=docstore,
-        doc_id_key="id",
+        source_id_key="id",
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
@@ -498,8 +475,10 @@ def test_parent(mocker: MockerFixture):
     assert result[1].page_content == " word"
     assert spy_add_documents.call_count == 1
     assert ids == [
-        hashlib.sha256(str(doc1.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
-        hashlib.sha256(str(doc2.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(
+            str(doc1.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
+        hashlib.sha256(
+            str(doc2.metadata[vs.source_id_key]).encode("utf-8")).hexdigest(),
     ]
     spy_add_documents.assert_has_calls(
         [
@@ -525,7 +504,7 @@ def test_parent(mocker: MockerFixture):
     spy_delete.assert_called_with(ids=[f'chunk-0{i}' for i in range(1, 5)])
 
 
-def test_parent_ids(mocker: MockerFixture):
+def test_parent_transformer_ids(mocker: MockerFixture):
     """
     parent_transformer = True
     chunk_transformer = False
@@ -539,12 +518,12 @@ def test_parent_ids(mocker: MockerFixture):
     mock_uuid4.side_effect = FakeUUID("chunk-")
 
     fake_uuid = FakeUUID(prefix="persistance-")
-    vs = ParentVectorStore(
+    vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=parent_transformer,
         chunk_transformer=None,  # No child transformer
         docstore=docstore,
-        doc_id_key="id",
+        source_id_key="id",
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
@@ -583,8 +562,8 @@ def test_parent_ids(mocker: MockerFixture):
     spy_delete.assert_called_with(ids=[f'chunk-0{i}' for i in range(1, 5)])
 
 
-# %%
-def test_nothing(mocker: MockerFixture):
+# %% without_transformer
+def test_without_transformer(mocker: MockerFixture):
     """
     parent_transformer = False
     chunk_transformer = False
@@ -597,12 +576,12 @@ def test_nothing(mocker: MockerFixture):
     mock_uuid4 = mocker.patch("uuid.uuid4")
     mock_uuid4.side_effect = FakeUUID("chunk-")
 
-    vs = ParentVectorStore(
+    vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,  # No parent transformer.
         chunk_transformer=None,  # No child transformer
         docstore=docstore,
-        doc_id_key="id",
+        source_id_key="id",
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
@@ -645,7 +624,7 @@ def test_nothing(mocker: MockerFixture):
     spy_delete.assert_called_with(ids=[f'chunk-0{i}' for i in range(1, 5)])
 
 
-def test_nothing_ids(mocker: MockerFixture):
+def test_without_transformer_ids(mocker: MockerFixture):
     """
     parent_transformer = False
     chunk_transformer = False
@@ -659,12 +638,12 @@ def test_nothing_ids(mocker: MockerFixture):
     mock_uuid4.side_effect = FakeUUID("chunk-")
 
     fake_uuid = FakeUUID(prefix="persistance-")
-    vs = ParentVectorStore(
+    vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,  # No parent transformer.
         chunk_transformer=None,  # No child transformer
         docstore=docstore,
-        doc_id_key="id",
+        source_id_key="id",
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
@@ -701,3 +680,619 @@ def test_nothing_ids(mocker: MockerFixture):
         ]
     )
     spy_delete.assert_called_with(ids=[f'persistance-0{i}' for i in range(1, 5)])
+
+
+# %% search
+def test_search_without_parent_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_search = mocker.spy(fake_vs, 'search')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,  # No parent transformer.
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.search("hello",
+                       search_type="similarity", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0].page_content == "Hello word"
+    assert result[1].page_content == "Hello langchain"
+    spy_search.assert_called_with(query='hello',
+                                  search_type="similarity",
+                                  k=10)
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_asearch_without_parent_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_search = mocker.spy(fake_vs, 'search')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,  # No parent transformer.
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    await vs.aadd_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = await vs.asearch("hello",
+                              search_type="similarity", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0].page_content == "Hello word"
+    assert result[1].page_content == "Hello langchain"
+    spy_search.assert_called_with(query='hello',
+                                  search_type="similarity",
+                                  k=10)
+
+
+# %% similarity_search
+def test_similarity_search_without_parent_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search = mocker.spy(fake_vs, 'similarity_search')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,  # No parent transformer.
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search("hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0].page_content == "Hello word"
+    assert result[1].page_content == "Hello langchain"
+    spy_similarity_search.assert_called_with(query='hello', k=10)
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_asimilarity_search_without_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search = mocker.spy(fake_vs, 'similarity_search')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,  # No parent transformer.
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    await vs.aadd_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = await vs.asimilarity_search("hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0].page_content == "Hello word"
+    assert result[1].page_content == "Hello langchain"
+    spy_similarity_search.assert_called_with(query='hello', k=10)
+
+
+# %% similarity_search_with_score
+def test_similarity_search_with_score_without_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_score = mocker.spy(fake_vs,
+                                                  'similarity_search_with_score')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,  # No parent transformer.
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_score(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello langchain"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_score.assert_called_with(query='hello', k=10)
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_asimilarity_search_with_score_without_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_score = mocker.spy(fake_vs,
+                                                  'similarity_search_with_score')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,  # No parent transformer.
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    await vs.aadd_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = await vs.asimilarity_search_with_score(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello langchain"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_score.assert_called_with(query='hello', k=10)
+
+
+def test_similarity_search_with_score_with_parent_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_score = mocker.spy(fake_vs,
+                                                  'similarity_search_with_score')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_score(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello"
+    assert result[0][0].metadata["id"] == 1
+    assert result[1][0].page_content == "Hello"
+    assert result[1][0].metadata["id"] == 3
+    spy_similarity_search_with_score.assert_called_with(query='hello', k=10)
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_asimilarity_search_with_score_with_parent_transformer(
+        mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_score = mocker.spy(fake_vs,
+                                                  'similarity_search_with_score')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    await vs.aadd_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = await vs.asimilarity_search_with_score(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello"
+    assert result[0][0].metadata["id"] == 1
+    assert result[1][0].page_content == "Hello"
+    assert result[1][0].metadata["id"] == 3
+    spy_similarity_search_with_score.assert_called_with(query='hello', k=10)
+
+
+def test_similarity_search_with_score_with_chunk_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_score = mocker.spy(fake_vs,
+                                                  'similarity_search_with_score')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,
+        chunk_transformer=chunk_transformer,
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_score(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello langchain"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_score.assert_called_with(query='hello', k=10)
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_asimilarity_search_with_score_with_chunk_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_score = mocker.spy(fake_vs,
+                                                  'similarity_search_with_score')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,
+        chunk_transformer=chunk_transformer,
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    await vs.aadd_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = await vs.asimilarity_search_with_score(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello langchain"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_score.assert_called_with(query='hello', k=10)
+
+
+def test_similarity_search_with_score(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_score = mocker.spy(fake_vs,
+                                                  'similarity_search_with_score')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=chunk_transformer,
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_score(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_score.assert_called_with(query='hello', k=10)
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_asimilarity_search_with_score(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_score = mocker.spy(fake_vs,
+                                                  'similarity_search_with_score')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=chunk_transformer,
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    await vs.aadd_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = await vs.asimilarity_search_with_score(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_score.assert_called_with(query='hello', k=10)
+
+
+# %% similarity_search_with_relevance_scores
+def test_similarity_search_with_relevance_scores_without_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_relevance_scores = mocker.spy(fake_vs,
+                                                  'similarity_search_with_relevance_scores')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,  # No parent transformer.
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_relevance_scores(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello langchain"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_relevance_scores.assert_called_with(query='hello', k=10)
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_asimilarity_search_with_relevance_scores_without_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_relevance_scores = mocker.spy(fake_vs,
+                                                  'similarity_search_with_relevance_scores')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,  # No parent transformer.
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    await vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = await vs.asimilarity_search_with_relevance_scores(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello langchain"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_relevance_scores.assert_called_with(query='hello', k=10)
+
+def test_similarity_search_with_relevance_scores_with_parent_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_relevance_scores = mocker.spy(fake_vs,
+                                                  'similarity_search_with_relevance_scores')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_relevance_scores(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello"
+    assert result[0][0].metadata["id"] == 1
+    assert result[1][0].page_content == "Hello"
+    assert result[1][0].metadata["id"] == 3
+    spy_similarity_search_with_relevance_scores.assert_called_with(query='hello', k=10)
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_asimilarity_search_with_relevance_scores_with_parent_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_relevance_scores = mocker.spy(fake_vs,
+                                                  'similarity_search_with_relevance_scores')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=None,  # No child transformer
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    await vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = await vs.asimilarity_search_with_relevance_scores(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello"
+    assert result[0][0].metadata["id"] == 1
+    assert result[1][0].page_content == "Hello"
+    assert result[1][0].metadata["id"] == 3
+    spy_similarity_search_with_relevance_scores.assert_called_with(query='hello', k=10)
+
+def test_similarity_search_with_relevance_scores_with_chunk_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_relevance_scores = mocker.spy(fake_vs,
+                                                  'similarity_search_with_relevance_scores')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,
+        chunk_transformer=chunk_transformer,
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_relevance_scores(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello langchain"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_relevance_scores.assert_called_with(query='hello', k=10)
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_similarity_search_with_relevance_scores_with_chunk_transformer(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_relevance_scores = mocker.spy(fake_vs,
+                                                  'similarity_search_with_relevance_scores')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=None,
+        chunk_transformer=chunk_transformer,
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    await vs.aadd_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = await vs.asimilarity_search_with_relevance_scores(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello langchain"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_relevance_scores.assert_called_with(query='hello', k=10)
+
+def test_similarity_search_with_relevance_scores(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_relevance_scores = mocker.spy(fake_vs,
+                                                  'similarity_search_with_relevance_scores')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=chunk_transformer,
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_relevance_scores(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_relevance_scores.assert_called_with(query='hello', k=10)
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="async not implemented yet")
+async def test_similarity_search_with_relevance_scores(mocker: MockerFixture):
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_relevance_scores = mocker.spy(fake_vs,
+                                                  'similarity_search_with_relevance_scores')
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=chunk_transformer,
+        docstore=docstore,
+        source_id_key="id",
+        search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_relevance_scores(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == 1.0
+    assert result[1][0].page_content == "Hello"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_relevance_scores.assert_called_with(query='hello', k=10)
+

@@ -2,7 +2,7 @@ import copy
 from typing import Sequence, Any, Iterator
 
 from langchain.schema import Document
-from langchain_parent.document_transformers.runnable_document_transformer import \
+from langchain_rag.document_transformers.runnable_document_transformer import \
     RunnableGeneratorDocumentTransformer
 
 

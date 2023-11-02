@@ -5,7 +5,7 @@ from langchain.schema import Document
 from langchain.storage._lc_store import create_kv_docstore, create_lc_store
 from langchain.storage.file_system import LocalFileStore
 
-from langchain_parent.storage import SQLStore
+from langchain_rag.storage import SQLStore
 
 
 @pytest.fixture

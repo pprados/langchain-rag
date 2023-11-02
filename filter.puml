@@ -1,0 +1,20 @@
+@startuml
+package "Filter" {
+object cohere_rerank
+object embeddings_filter
+object compressor
+object long_context_reoder
+}
+
+package "Retriever" {
+    object multi_query_retriever
+    object compression_retriever
+}
+
+
+compression_retriever --> compressor
+compression_retriever --> multi_query_retriever
+compressor --> embeddings_filter
+embeddings_filter --> cohere_rerank
+cohere_rerank --> long_context_reoder
+@enduml
