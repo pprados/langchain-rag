@@ -1,4 +1,5 @@
-from abc import abstractmethod
+import asyncio
+from abc import abstractmethod, ABC
 from collections.abc import AsyncIterator
 from typing import Any, Iterator, Optional, Sequence, Union, \
     Iterable, TypeVar
@@ -38,7 +39,7 @@ from langchain.schema.runnable import RunnableConfig, RunnableSerializable
 T = TypeVar("T")
 
 
-async def _to_async_iterator(iterator: Iterable[T]) -> AsyncIterator[T]:
+async def to_async_iterator(iterator: Iterable[T]) -> AsyncIterator[T]:
     """Convert an iterable to an async iterator."""
     for item in iterator:
         yield item
@@ -50,6 +51,7 @@ class RunnableGeneratorDocumentTransformer(
         Union[AsyncIterator[Document], Iterator[Document]]  # output
     ],
     BaseDocumentTransformer,
+    ABC
 ):
     """
     Runnable Document Transformer with lazy transformation.
@@ -72,7 +74,8 @@ class RunnableGeneratorDocumentTransformer(
         # Convert lazy to classical transformation
         return [
             doc
-            async for doc in self.alazy_transform_documents(iter(documents), **kwargs)
+            async for doc in
+                self.alazy_transform_documents(iter(documents), **kwargs)  # type:ignore
         ]
 
     @abstractmethod
@@ -87,9 +90,7 @@ class RunnableGeneratorDocumentTransformer(
         Returns:
             An iterator oftransformed Documents.
         """
-        # Default implementation. Not realy lazy.
-        # return iter(self.transform_documents(list(documents)))
-        raise NotImplementedError("not yet")
+        raise NotImplementedError()
 
     @abstractmethod
     async def alazy_transform_documents(
@@ -104,9 +105,7 @@ class RunnableGeneratorDocumentTransformer(
         Returns:
             An interator of transformed Documents.
         """
-        # Default implementation. Not realy lazy.
-        # return iter(await self.atransform_documents(list(documents)))
-        raise NotImplementedError("not yet")
+        raise NotImplementedError()
 
     def invoke(
             self,
@@ -114,8 +113,8 @@ class RunnableGeneratorDocumentTransformer(
             config: Optional[RunnableConfig] = None,
             **kwargs: Any,
     ) -> Union[AsyncIterator[Document], Iterator[Document]]:
-        if hasattr(input, "__aiter__"):
-            raise ValueError("Use ainvoke")
+        if isinstance(input, AsyncIterator):
+            raise ValueError("Use ainvoke with async iterator")
         config = config or {}
 
         if hasattr(self, "lazy_transform_documents"):
@@ -132,12 +131,13 @@ class RunnableGeneratorDocumentTransformer(
     ) -> Union[AsyncIterator[Document], Iterator[Document]]:
         # # Default implementation, without generator
         config = config or {}
-        return self.alazy_transform_documents(documents=input, **config)
+        return self.alazy_transform_documents(documents=input, **config)  # type:ignore
 
 
 class RunnableDocumentTransformer(
     RunnableSerializable[Sequence[Document], Sequence[Document]],
     BaseDocumentTransformer,
+    ABC
 ):
     """
     Runnable Document Transformer with lazy transformation.

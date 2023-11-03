@@ -138,7 +138,7 @@ class SQLStore(BaseStore[str, bytes]):
     def mget(self, keys: Sequence[str]) -> List[Optional[bytes]]:
         result = {}
         with self._make_session() as session:
-            for v in session.query(Value).filter(
+            for v in session.query(Value).filter(  # type: ignore
                 and_(
                     Value.key.in_(keys),
                     Value.namespace == self.namespace,
@@ -168,7 +168,7 @@ class SQLStore(BaseStore[str, bytes]):
             session.commit()
 
     def _mdetete(self, keys: Sequence[str], session: Session) -> None:
-        session.query(Value).filter(
+        session.query(Value).filter(  # type: ignore
             and_(
                 Value.key.in_(keys),
                 Value.namespace == self.namespace,
@@ -195,7 +195,8 @@ class SQLStore(BaseStore[str, bytes]):
 
     def yield_keys(self, *, prefix: Optional[str] = None) -> Iterator[str]:
         with self._make_session() as session:
-            for v in session.query(Value).filter(Value.namespace == self.namespace):
+            for v in session.query(Value).filter(  # type: ignore
+                    Value.namespace == self.namespace):
                 yield str(v.key)
             session.close()
 

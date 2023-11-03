@@ -87,7 +87,7 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
         outputs = await asyncio.gather(
             *[
                 self.llm_chain.apredict(
-                    **self.get_input(documents), callbacks=_callbacks
+                    **self.get_input(doc), callbacks=_callbacks
                 )
                 for doc in documents
             ]

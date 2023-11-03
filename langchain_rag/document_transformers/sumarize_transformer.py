@@ -1,8 +1,8 @@
 import asyncio
 import copy
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncIterator
 from functools import partial
-from typing import Any, Callable, Dict, Generator, Optional, Sequence, Iterator
+from typing import Any, Callable, Dict, Optional, Sequence, Iterator, Union, cast
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
@@ -11,7 +11,7 @@ from langchain.schema import Document
 from langchain.schema.language_model import BaseLanguageModel
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer,
+    RunnableGeneratorDocumentTransformer, to_async_iterator,
 )
 
 
@@ -49,7 +49,7 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
     """Callable for constructing the chain input from the query and a Document."""
 
     def lazy_transform_documents(
-        self, documents: Iterator[Document], **kwargs: Any
+            self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
         """Compress page content of raw documents."""
         _callbacks = kwargs.get("callbacks", None)
@@ -65,30 +65,38 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
             )
 
     def transform_documents(
-        self, documents: Sequence[Document], **kwargs: Any
+            self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         return list(self.lazy_transform_documents(documents=iter(documents), **kwargs))
 
-    async def lazy_atransform_documents(
-        self, documents: Sequence[Document], **kwargs: Any
+    async def alazy_transform_documents(  # type:ignore
+            self, documents: Union[AsyncIterator[Document], Iterator[Document]],
+            **kwargs: Any
     ) -> AsyncIterator[Document]:
         """Summarize the page content of raw documents asynchronously."""
         _callbacks = kwargs.get("callbacks", None)
+        if isinstance(documents, AsyncIterator):
+            async_documents = cast(AsyncIterator[Document], documents)
+        else:
+            async_documents = to_async_iterator(documents)
+
         outputs = await asyncio.gather(
             *[
                 self.llm_chain.apredict(
-                    **self.get_input(documents), callbacks=_callbacks
+                    **self.get_input(doc), callbacks=_callbacks
                 )
-                for doc in documents
+                async for doc in async_documents
             ]
         )
-        for i, doc in enumerate(documents):
+        i = 0
+        async for doc in async_documents:
             if not outputs[i]:
                 continue
             yield Document(page_content=outputs[i], metadata=doc.metadata)
+            i += 1
 
     async def atransform_documents(
-        self, documents: Sequence[Document], **kwargs: Any
+            self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         """Asynchronously transform a list of documents.
 
@@ -105,11 +113,11 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
 
     @classmethod
     def from_llm(
-        cls,
-        llm: BaseLanguageModel,
-        prompt: Optional[PromptTemplate] = None,
-        get_input: Optional[Callable[[Document], dict]] = None,
-        llm_chain_kwargs: Optional[dict] = None,
+            cls,
+            llm: BaseLanguageModel,
+            prompt: Optional[PromptTemplate] = None,
+            get_input: Optional[Callable[[Document], dict]] = None,
+            llm_chain_kwargs: Optional[dict] = None,
     ) -> "SummarizeTransformer":
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()

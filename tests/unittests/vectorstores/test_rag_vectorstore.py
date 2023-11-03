@@ -2,7 +2,7 @@ import asyncio
 import copy
 import hashlib
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple, Type, \
-    AsyncIterator
+    AsyncIterator, Union, cast
 from unittest.mock import call
 
 import pytest
@@ -14,10 +14,11 @@ from langchain.text_splitter import TokenTextSplitter
 from pytest_mock import MockerFixture
 
 from langchain_rag.document_transformers import DocumentTransformers
-from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer,
-)
 from langchain_rag.vectorstores import RAGVectorStore
+from tests.unittests.document_transformers.sample_transformer import \
+    LowerLazyTransformer
+from tests.unittests.document_transformers.test_runnable_transformers import \
+    UpperLazyTransformer
 
 
 class FakeUUID:
@@ -31,7 +32,7 @@ class FakeUUID:
 
 
 def _must_be_called(must_be_called: List[Tuple[List[str], List[Dict[str, Any]]]]) \
-        -> List[_Call]:
+        -> List[Any]:
     calls = []
     for page_contents, metadatas in must_be_called:
         for page_content, metadata in zip(page_contents, metadatas):
@@ -118,68 +119,6 @@ class FakeVectorStore(VectorStore):
 
     def delete(self, ids: Optional[List[str]] = None, **kwargs: Any) -> Optional[bool]:
         return True
-
-
-# class UpperDocumentTransformer(RunnableGeneratorDocumentTransformer):
-#     def lazy_transform_documents(
-#             self, documents: Iterator[Document], **kwargs: Any
-#     ) -> Iterator[Document]:
-#         yield from (
-#             Document(page_content=doc.page_content.upper(),
-#                      metadata=copy.deepcopy(doc.metadata))
-#             for doc in documents)
-#     def transform_documents(
-#             self, documents: Sequence[Document], **kwargs: Any
-#     ) -> Sequence[Document]:
-#         return super().transform_documents(documents,**kwargs)
-#
-class UpperLazyTransformer(RunnableGeneratorDocumentTransformer):
-    def lazy_transform_documents(
-            self, documents: Iterator[Document], **kwargs: Any
-    ) -> Iterator[Document]:
-        yield from (
-            Document(
-                page_content=doc.page_content.upper(),
-                metadata=copy.deepcopy(doc.metadata),
-            )
-            for doc in documents
-        )
-
-    async def alazy_transform_documents(
-            self, documents: Iterator[Document],
-            **kwargs: Any
-    ) -> Iterator[Document]:
-        # for doc in documents:
-        #     await asyncio.sleep(0)  # To be sure it's async
-        #     yield Document(
-        #         page_content=doc.page_content.upper(),
-        #         metadata=copy.deepcopy(doc.metadata),
-        #     )
-        raise NotImplementedError("not yet")
-
-class LowerLazyTransformer(RunnableGeneratorDocumentTransformer):
-    def lazy_transform_documents(
-            self, documents: Iterator[Document], **kwargs: Any
-    ) -> Iterator[Document]:
-        yield from (
-            Document(
-                page_content=doc.page_content.lower(),
-                metadata=copy.deepcopy(doc.metadata),
-            )
-            for doc in documents
-        )
-
-    async def alazy_transform_documents(
-            self, documents: AsyncIterator[Document],
-            **kwargs: Any
-    ) -> AsyncIterator[Document]:
-        async for doc in documents:
-            await asyncio.sleep(0)  # To be sure it's async
-            yield Document(
-                page_content=doc.page_content.lower(),
-                metadata=copy.deepcopy(doc.metadata),
-            )
-
 
 class SplitterWithUniqId(TokenTextSplitter):
     def split_documents(self, documents: Iterable[Document]) -> List[Document]:
