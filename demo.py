@@ -11,33 +11,46 @@ from langchain.document_transformers import LongContextReorder
 from langchain.embeddings import CacheBackedEmbeddings, OpenAIEmbeddings
 from langchain.indexes import index
 from langchain.llms.openai import OpenAI
-from langchain.retrievers import WikipediaRetriever, MergerRetriever, \
-    SelfQueryRetriever, MultiQueryRetriever, ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import DocumentCompressorPipeline, \
-    EmbeddingsFilter, CohereRerank
+from langchain.retrievers import (
+    ContextualCompressionRetriever,
+    MergerRetriever,
+    MultiQueryRetriever,
+    SelfQueryRetriever,
+    WikipediaRetriever,
+)
+from langchain.retrievers.document_compressors import (
+    CohereRerank,
+    DocumentCompressorPipeline,
+    EmbeddingsFilter,
+)
 from langchain.schema import Document
 from langchain.storage import LocalFileStore
 from langchain.text_splitter import TokenTextSplitter
 from langchain.vectorstores.chroma import Chroma
 
-from langchain_rag.document_transformers import DocumentTransformers, \
-    SummarizeTransformer, CopyDocumentTransformer, GenerateQuestionsTransformer
+from langchain_rag.document_transformers import (
+    CopyDocumentTransformer,
+    DocumentTransformers,
+    GenerateQuestionsTransformer,
+    SummarizeTransformer,
+)
 from langchain_rag.vectorstores import RAGVectorStore
 
 # %% set parameters
 load_dotenv(override=True)
 logger = logging.getLogger(__name__)
 
-id_key = 'id'
+id_key = "id"
 nb_documents_to_import = 3
 top_k = 4
 
 context_size = 4096  # For the demonstration use a smal context_size.
 max_tokens = int(context_size * (30 / 100))  # x% for the response
 max_input_tokens = (
-                           context_size - max_tokens) // top_k  # Need top_k fragment in the prompt
+    context_size - max_tokens
+) // top_k  # Need top_k fragment in the prompt
 
-ROOT_PATH = tempfile._gettempdir() + "/rag"
+ROOT_PATH = tempfile.gettempdir() + "/rag"
 # Clean up
 if os.path.exists(ROOT_PATH):
     shutil.rmtree(ROOT_PATH)
@@ -46,8 +59,8 @@ VS_PATH = ROOT_PATH + "/vs"
 
 # %% Set debug and trace
 
-from langchain.globals import set_debug, set_verbose
 from langchain.callbacks import StdOutCallbackHandler
+from langchain.globals import set_debug, set_verbose
 
 set_debug(False)
 set_verbose(False)
@@ -55,14 +68,13 @@ if True:
     VERBOSE_INPUT = True
     VERBOSE_OUTPUT = True
 
-
     class ExStdOutCallbackHandler(StdOutCallbackHandler):
         def on_text(
-                self,
-                text: str,
-                color: Optional[str] = None,
-                end: str = "",
-                **kwargs: Any,
+            self,
+            text: str,
+            color: Optional[str] = None,
+            end: str = "",
+            **kwargs: Any,
         ) -> None:
             if VERBOSE_INPUT:
                 print("====")
@@ -96,7 +108,6 @@ if True:
                 else:
                     pass
 
-
     CALLBACKS = [ExStdOutCallbackHandler()]
 else:
     CALLBACKS = []
@@ -104,31 +115,30 @@ else:
 CALLBACKS = []
 
 
-def pretty_print_docs(docs: Union[str, List[Document]], metadatas=[],
-                      kind: str = "Variations"):
-    def print_metadata(d):
+def pretty_print_docs(
+    docs: Union[str, List[Document]],
+        metadatas:Sequence[str],
+        kind: str = "Variations"
+) -> None:
+    def print_metadata(d:Document) -> str:
         s = ",\n".join(
-            [f"{metadata}={repr(d.metadata.get(metadata))}" for metadata in metadatas])
+            [f"{metadata}={repr(d.metadata.get(metadata))}" for metadata in metadatas]
+        )
         if s:
-            return f'\n\033[92m{s}\033[0m'
+            return f"\n\033[92m{s}\033[0m"
         return ""
 
-    def print_doc(d, i):
+    def print_doc(d:Document, i:int) -> str:
         r = f"\033[94m{kind} {i + 1}:\n{d.page_content[:80]}"
         if len(d.page_content) > 80:
             r += f"...[:{max(0, len(d.page_content) - 80)}]"
-        r += f'\033[0m{print_metadata(d)}'
+        r += f"\033[0m{print_metadata(d)}"
         return r
 
     if type(docs) is list:
-        print(
-            f"\n{'-' * 40}\n".join(
-                [print_doc(d, i)
-                 for i, d in enumerate(docs)]
-            )
-        )
+        print(f"\n{'-' * 40}\n".join([print_doc(d, i) for i, d in enumerate(docs)]))
     else:
-        print(f'\033[92m{docs}\033[0m')
+        print(f"\033[92m{docs}\033[0m")
 
 
 # %% Select the llm
@@ -143,7 +153,7 @@ llm = OpenAI(
 embeddings = CacheBackedEmbeddings.from_bytes_store(
     OpenAIEmbeddings(),
     LocalFileStore(ROOT_PATH + "/cache_embedding"),
-    namespace="cache"
+    namespace="cache",
 )
 
 # %% Test
@@ -177,10 +187,7 @@ embeddings = CacheBackedEmbeddings.from_bytes_store(
 # pg_vectorstore.add_documents(docs)
 
 # %% Select the transformer
-parent_transformer = TokenTextSplitter(
-    chunk_size=max_input_tokens,
-    chunk_overlap=0
-)
+parent_transformer = TokenTextSplitter(chunk_size=max_input_tokens, chunk_overlap=0)
 chunk_transformer = DocumentTransformers(
     transformers=[
         GenerateQuestionsTransformer.from_llm(llm),
@@ -246,19 +253,15 @@ rag_vectorstore, index_kwargs = RAGVectorStore.from_vs_in_sql(
 # index_kwargs["record_manager"].create_schema()
 # %% Import documents
 
-documents = (WikipediaRetriever(top_k_results=nb_documents_to_import)
-             .get_relevant_documents("mathematic"))
+documents = WikipediaRetriever(
+    top_k_results=nb_documents_to_import
+).get_relevant_documents("mathematic")
 
-index(
-    docs_source=documents,
-    cleanup="incremental",
-    **index_kwargs
-)
+index(docs_source=documents, cleanup="incremental", **index_kwargs)
 
 # %% Refine retrievers
 merge_retriever = MergerRetriever(
-    retrievers=
-    [
+    retrievers=[
         SelfQueryRetriever.from_llm(
             llm=llm,
             vectorstore=rag_vectorstore,
@@ -270,11 +273,13 @@ merge_retriever = MergerRetriever(
                     type="string",
                 ),
             ],
-            verbose=True),
+            verbose=True,
+        ),
         chroma_vectorstore.as_retriever(
-            search_kwargs={
-                "filter": {"transformer": {"$eq": "SummarizeTransformer"}}})
-    ])
+            search_kwargs={"filter": {"transformer": {"$eq": "SummarizeTransformer"}}}
+        ),
+    ]
+)
 
 multi_query_retriever = MultiQueryRetriever.from_llm(
     llm=llm,
@@ -284,17 +289,15 @@ multi_query_retriever = MultiQueryRetriever.from_llm(
 compression_retriever = ContextualCompressionRetriever(
     base_compressor=DocumentCompressorPipeline(
         transformers=[
-            EmbeddingsFilter(
-                embeddings=embeddings,
-                similarity_threshold=0.7
+            EmbeddingsFilter(embeddings=embeddings, similarity_threshold=0.7),
+            CohereRerank(
+                top_n=top_k,
+                user_agent="langchain",  # FIXME: bug avec version langchain
             ),
-            CohereRerank(top_n=top_k,
-                         user_agent="langchain",  # FIXME: bug avec version langchain
-                         ),
             LongContextReorder(),
         ]
     ),
-    base_retriever=multi_query_retriever
+    base_retriever=multi_query_retriever,
 )
 final_retriever = compression_retriever
 # %% Use the RAG
@@ -322,11 +325,13 @@ chain = RetrievalQAWithReferencesChain.from_chain_type(
 )
 result = chain(query)
 print(result["answer"])
-pretty_print_docs(result["source_documents"], ['source'], kind="Chunk")
+pretty_print_docs(cast(List[Document],result["source_documents"]),
+                  ["source"], kind="Chunk")
 
 # %% Use RetrievalQAWithReferencesAndVerbatimsChain
-from langchain_qa_with_references.chains import \
-    RetrievalQAWithReferencesAndVerbatimsChain
+from langchain_qa_with_references.chains import (
+    RetrievalQAWithReferencesAndVerbatimsChain,
+)
 
 chain = RetrievalQAWithReferencesAndVerbatimsChain.from_chain_type(
     llm=llm,
@@ -336,7 +341,9 @@ chain = RetrievalQAWithReferencesAndVerbatimsChain.from_chain_type(
 )
 result = chain(query)
 print(result["answer"])
-pretty_print_docs(result["source_documents"], ["source", "verbatims"])
+pretty_print_docs(cast(List[Document],
+                       result["source_documents"]),
+                  ["source", "verbatims"])
 print(chain(query)["answer"])
 print(chain(query)["answer"])
 print(chain(query)["answer"])

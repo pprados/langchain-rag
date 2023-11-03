@@ -1,11 +1,11 @@
-from typing import Sequence, Optional, List
+from datetime import datetime
+from typing import List, Optional, Sequence
 
 from langchain.indexes.base import RecordManager
-from datetime import datetime
+
 
 class MemoryRecordManager(RecordManager):
-    def __init__(self,
-                 namespace):
+    def __init__(self, namespace:str):
         super().__init__(namespace=namespace)
 
     def create_schema(self) -> None:

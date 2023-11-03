@@ -1,13 +1,26 @@
 import contextlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Union, AsyncGenerator, Generator
-from typing import Iterator, Tuple, TypeVar
+from typing import (
+    Any,
+    AsyncGenerator,
+    Dict,
+    Generator,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from langchain.schema import BaseStore
 from sqlalchemy import (
+    Column,
     Engine,
+    PickleType,
     and_,
-    create_engine, Column, PickleType,
+    create_engine,
 )
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -16,12 +29,12 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, sessionmaker, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 Base = declarative_base()
 
 
-def items_equal(x, y):
+def items_equal(x:Any, y:Any) -> bool:
     return x == y
 
 
@@ -37,14 +50,7 @@ class Value(Base):  # type: ignore[valid-type,misc]
     namespace: Mapped[str] = mapped_column(primary_key=True, index=True, nullable=False)
     key: Mapped[str] = mapped_column(primary_key=True, index=True, nullable=False)
     # value: Mapped[Any] = Column(type_=PickleType, index=False, nullable=False)
-    value = Column('earthquake', PickleType(comparator=items_equal))
-    # value: Mapped[str]
-    # value: Mapped[str] = Column(index=False, nullable=False)
-
-    # __table_args__ = (
-    #     UniqueConstraint("key", "namespace", name="uix_key_namespace"),  # C'est quoi ?
-    #     Index("ix_key_namespace", "key", "namespace"),
-    # )
+    value:Any = Column("earthquake", PickleType(comparator=items_equal))
 
 
 class SQLStore(BaseStore[str, bytes]):
@@ -75,14 +81,15 @@ class SQLStore(BaseStore[str, bytes]):
 
     """
 
-    def __init__(self,
-                 *,
-                 namespace: str,
-                 db_url: Union[str, Path],
-                 engine: Optional[Union[Engine, AsyncEngine]] = None,
-                 engine_kwargs: Optional[Dict[str, Any]] = None,
-                 async_mode: bool = False,
-                 ):
+    def __init__(
+        self,
+        *,
+        namespace: str,
+        db_url: Union[str, Path],
+        engine: Optional[Union[Engine, AsyncEngine]] = None,
+        engine_kwargs: Optional[Dict[str, Any]] = None,
+        async_mode: bool = False,
+    ):
         if db_url is None and engine is None:
             raise ValueError("Must specify either db_url or engine")
 
@@ -92,9 +99,9 @@ class SQLStore(BaseStore[str, bytes]):
         _engine: Union[Engine, AsyncEngine]
         if db_url:
             if async_mode:
-                _engine = create_async_engine(db_url, **(engine_kwargs or {}))
+                _engine = create_async_engine(url=str(db_url), **(engine_kwargs or {}))
             else:
-                _engine = create_engine(db_url, **(engine_kwargs or {}))
+                _engine = create_engine(url=str(db_url), **(engine_kwargs or {}))
         elif engine:
             _engine = engine
 
@@ -132,10 +139,10 @@ class SQLStore(BaseStore[str, bytes]):
         result = {}
         with self._make_session() as session:
             for v in session.query(Value).filter(
-                    and_(
-                        Value.key.in_(keys),
-                        Value.namespace == self.namespace,
-                    )
+                and_(
+                    Value.key.in_(keys),
+                    Value.namespace == self.namespace,
+                )
             ):
                 result[v.key] = v.value
         return [result.get(key) for key in keys]
@@ -152,9 +159,12 @@ class SQLStore(BaseStore[str, bytes]):
     def mset(self, key_value_pairs: Sequence[Tuple[str, bytes]]) -> None:
         with self._make_session() as session:
             self._mdetete([key for key, _ in key_value_pairs], session)
-            session.add_all([Value(namespace=self.namespace,
-                                   key=k,
-                                   value=v) for k, v in key_value_pairs])
+            session.add_all(
+                [
+                    Value(namespace=self.namespace, key=k, value=v)
+                    for k, v in key_value_pairs
+                ]
+            )
             session.commit()
 
     def _mdetete(self, keys: Sequence[str], session: Session) -> None:
@@ -183,9 +193,7 @@ class SQLStore(BaseStore[str, bytes]):
     #         await self._mdelete(keys, session)
     #         session.commit()
 
-    def yield_keys(
-            self, *, prefix: Optional[str] = None
-    ) -> Iterator[str]:
+    def yield_keys(self, *, prefix: Optional[str] = None) -> Iterator[str]:
         with self._make_session() as session:
             for v in session.query(Value).filter(Value.namespace == self.namespace):
                 yield str(v.key)

@@ -44,8 +44,8 @@ chromadb = "^0.4.10"
 aiosqlite = "*"
 pgvector = "*"
 psycopg2-binary = "*"
-iplantuml = "*"
-langchain-qa_with_references = { path = "../langchain-qa_with_references", develop = true }
+#langchain-qa_with_references = { path = "../langchain-qa_with_references", develop = true }
+langchain-qa_with_references = "^0.0.329"
 
 [tool.poetry.group.lint]
 optional = true

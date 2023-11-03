@@ -1,4 +1,4 @@
-from typing import Any, Iterable, List, Optional, Tuple, TypeVar, Type, Generic
+from typing import Any, Generic, Iterable, List, Optional, Tuple, Type, TypeVar
 
 from langchain.schema import Document
 from langchain.schema.embeddings import Embeddings
@@ -6,11 +6,14 @@ from langchain.schema.vectorstore import VectorStore
 
 VST = TypeVar("VST", bound="VectorStore")
 T = TypeVar("T")
+
+
 class WrapperVectorStore(VectorStore):
     """
     A generic wrapper for vectorstore.
     Can be known by SelfQueryRetriever to generate the target request.
     """
+
     def __init__(self, *, vectorstore: VectorStore):
         self.vectorstore = vectorstore
 
@@ -156,51 +159,60 @@ class WrapperVectorStore(VectorStore):
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
 
-    @classmethod
-    def from_documents(
-        cls: Type[VST],
-        vectorstore_cls:Type[VST],
-        **kwargs: Any,
-    ) -> VST:
-        return cls(vectorstore=vectorstore_cls.from_documents(**kwargs))
+    # @classmethod
+    # def from_documents(
+    #     cls: Type[VST],
+    #     documents: List[Document],
+    #     embedding: Embeddings,
+    #     **kwargs: Any,
+    # ) -> VST:
+    #     vectorstore_cls=kwargs["vectorstore_cls"]
+    #     return cls(vectorstore=vectorstore_cls.from_documents(**kwargs))
+
+    # @classmethod
+    # async def afrom_documents(
+    #     cls: Type[VST],
+    #     documents: List[Document],
+    #     embedding: Embeddings,
+    #     **kwargs: Any,
+    # ) -> VST:
+    #     vectorstore_cls=kwargs["vectorstore_cls"]
+    #     return await cls(vectorstore=vectorstore_cls.afrom_documents(**kwargs))
+
+    # @classmethod
+    # def from_texts(
+    #     cls: Type[VST],
+    #     texts: List[str],
+    #     embedding: Embeddings,
+    #     metadatas: Optional[List[dict]] = None,
+    #     **kwargs: Any,
+    # ) -> VST:
+    #     vectorstore_cls=kwargs["vectorstore_cls"]
+    #     return cls(vectorstore=vectorstore_cls.from_texts(**kwargs))
+
+    # @classmethod
+    # async def afrom_texts(
+    #     cls: Type[VST],
+    #     texts: List[str],
+    #     embedding: Embeddings,
+    #     metadatas: Optional[List[dict]] = None,
+    #     **kwargs: Any,
+    # ) -> VST:
+    #     vectorstore_cls=kwargs["vectorstore_cls"]
+    #     return await cls(vectorstore=vectorstore_cls.afrom_texts(**kwargs))
 
 
-    @classmethod
-    async def afrom_documents(
-        cls: Type[VST],
-        vectorstore_cls:Type[VST],
-        **kwargs: Any,
-    ) -> VST:
-        return await cls(vectorstore=vectorstore_cls.afrom_documents(**kwargs))
-
-    @classmethod
-    def from_texts(
-        cls: Type[VST],
-        vectorstore_cls:Type[VST],
-        **kwargs: Any,
-    ) -> VST:
-        return cls(vectorstore=vectorstore_cls.from_texts(**kwargs))
-
-    @classmethod
-    async def afrom_texts(
-        cls: Type[VST],
-        vectorstore_cls:Type[VST],
-        **kwargs: Any,
-    ) -> VST:
-        return await cls(vectorstore=vectorstore_cls.afrom_texts(**kwargs))
-
-def _hack():
+def _hack() -> None:
     from langchain.retrievers.self_query import base as to_patch
-    old_get_builtin_translator = \
-        to_patch._get_builtin_translator
 
-    def patch_get_builtin_translator(vectorstore):
+    old_get_builtin_translator = to_patch._get_builtin_translator
+
+    def patch_get_builtin_translator(vectorstore:VectorStore) -> Any:
         if isinstance(vectorstore, WrapperVectorStore):
             return patch_get_builtin_translator(vectorstore.vectorstore)
         return old_get_builtin_translator(vectorstore)
 
-    to_patch._get_builtin_translator = (
-        patch_get_builtin_translator)
+    to_patch._get_builtin_translator = patch_get_builtin_translator
 
 
 _hack()

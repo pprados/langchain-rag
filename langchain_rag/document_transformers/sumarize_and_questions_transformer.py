@@ -1,19 +1,17 @@
-import asyncio
 import copy
-from functools import partial
-from typing import Callable, Sequence, Optional, Dict, Any, Generator, List, cast
+from typing import Any, Callable, Dict, List, Optional, cast, \
+    Iterator
 
 from langchain.chains import LLMChain
-from langchain.output_parsers import NumberedListOutputParser, PydanticOutputParser
+from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import PromptTemplate
-from langchain.schema import Document, BaseDocumentTransformer
-from langchain.schema.language_model import BaseLanguageModel
 from langchain.pydantic_v1 import BaseModel
-from langchain_rag.document_transformers import RunnableDocumentTransformer
-from langchain_rag.document_transformers.runnable_document_transformer import \
-    RunnableGeneratorDocumentTransformer
+from langchain.schema import Document, BaseOutputParser
+from langchain.schema.language_model import BaseLanguageModel
 
-from .generate_questions import GenerateQuestionsTransformer
+from langchain_rag.document_transformers.runnable_document_transformer import (
+    RunnableGeneratorDocumentTransformer,
+)
 
 
 def _default_get_input(doc: Document) -> Dict[str, Any]:
@@ -22,13 +20,16 @@ def _default_get_input(doc: Document) -> Dict[str, Any]:
         "context": doc.page_content,
     }
 
+
 class SummarizeAndQuestions(BaseModel):
-    summary:str
+    summary: str
     """the document summary."""
-    questions:List[str]
+    questions: List[str]
     """A list of questions"""
 
-_default_parser = PydanticOutputParser(pydantic_object=SummarizeAndQuestions)
+
+_default_parser: BaseOutputParser = PydanticOutputParser(
+    pydantic_object=SummarizeAndQuestions)
 
 _default_template = """
 1. Given a text input, generate {nb_of_questions} questions from it in the same language. 
@@ -40,40 +41,49 @@ Context:
 {format_instructions}"""
 
 
-
 def _get_default_chain_prompt() -> PromptTemplate:
     return PromptTemplate.from_template(
         template=_default_template,
         output_parser=_default_parser,
-        partial_variables={"format_instructions": _default_parser.get_format_instructions()}
+        partial_variables={
+            "format_instructions": _default_parser.get_format_instructions()
+        },
     )
 
 
 class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
     """Generate questions and summarize for each Documents."""
 
+    llm_chain: LLMChain
+    get_input: Callable[[Document], dict] = _default_get_input
+    nb_of_questions: int = 3
+
     def lazy_transform_documents(
             self,
-            documents: Sequence[Document],
-            **kwargs: Any,
-    ) -> Generator[Document, None, None]:
+            documents: Iterator[Document],
+            **kwargs: Any
+    ) -> Iterator[Document]:
         """Compress page content of raw documents."""
         _callbacks = kwargs.get("callbacks", None)
         for doc in documents:
-            _input = self.get_input(doc)
-            output = cast(SummarizeAndQuestions,self.llm_chain.predict(
-                callbacks=_callbacks,
-                **{**self.get_input(doc),
-                        **{"nb_of_questions": self.nb_of_questions}}
-            ))
+            _input = {
+                **self.get_input(doc),
+                **{"nb_of_questions": self.nb_of_questions},
+            }
+            output = cast(
+                SummarizeAndQuestions,
+                self.llm_chain.predict(
+                    callbacks=_callbacks,
+                    **_input,
+                ),
+            )
             if not output:
                 continue
             yield Document(page_content=output.summary, metadata=doc.metadata)
             for q in output.questions:
                 metadata = copy.deepcopy(doc.metadata)
                 metadata["transformer"] = self.__class__.__name__
-                yield Document(page_content=q,
-                               metadata=metadata)
+                yield Document(page_content=q, metadata=metadata)
 
     @classmethod
     def from_llm(
@@ -83,7 +93,7 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
             get_input: Optional[Callable[[Document], dict]] = None,
             nb_of_questions: int = 3,
             llm_chain_kwargs: Optional[dict] = None,
-    ) -> 'SummarizeAndQuestionsTransformer':
+    ) -> "SummarizeAndQuestionsTransformer":
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
@@ -91,7 +101,8 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
             llm=llm,
             prompt=_prompt,
             output_parser=_prompt.output_parser,
-            **(llm_chain_kwargs or {}))
-        return cls(llm_chain=llm_chain,
-                   get_input=_get_input,
-                   nb_of_questions=nb_of_questions)
+            **(llm_chain_kwargs or {}),
+        )
+        return cls(
+            llm_chain=llm_chain, get_input=_get_input, nb_of_questions=nb_of_questions
+        )

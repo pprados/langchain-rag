@@ -1,15 +1,18 @@
 import asyncio
 import copy
+from collections.abc import AsyncGenerator, AsyncIterator
 from functools import partial
-from typing import Callable, Sequence, Optional, Dict, Any, Generator
+from typing import Any, Callable, Dict, Generator, Optional, Sequence, Iterator
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
 from langchain.prompts import PromptTemplate
 from langchain.schema import Document
 from langchain.schema.language_model import BaseLanguageModel
-from langchain_rag.document_transformers.runnable_document_transformer import \
-    RunnableGeneratorDocumentTransformer
+
+from langchain_rag.document_transformers.runnable_document_transformer import (
+    RunnableGeneratorDocumentTransformer,
+)
 
 
 def _default_get_input(doc: Document) -> Dict[str, Any]:
@@ -46,45 +49,35 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
     """Callable for constructing the chain input from the query and a Document."""
 
     def lazy_transform_documents(
-            self,
-            documents: Sequence[Document],
-            **kwargs: Any,
-    ) -> Generator[Document, None, None]:
+        self, documents: Iterator[Document], **kwargs: Any
+    ) -> Iterator[Document]:
         """Compress page content of raw documents."""
         _callbacks = kwargs.get("callbacks", None)
         for doc in documents:
             _input = self.get_input(doc)
-            output = self.llm_chain.predict(
-                callbacks=_callbacks,
-                **_input)
+            output = self.llm_chain.predict(callbacks=_callbacks, **_input)
             if not output:
                 continue
-            metadata=copy.deepcopy(doc.metadata)
+            metadata = copy.deepcopy(doc.metadata)
             metadata["transformer"] = self.__class__.__name__
-            yield Document(page_content="SUMMARY:\n"+str(output),  # FIXME
-                           metadata=metadata)
+            yield Document(
+                page_content="SUMMARY:\n" + str(output), metadata=metadata  # FIXME
+            )
 
     def transform_documents(
-            self,
-            documents: Sequence[Document],
-            **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
-        return list(self.lazy_transform_documents(
-            documents=documents,
-            **kwargs
-        ))
+        return list(self.lazy_transform_documents(documents=iter(documents), **kwargs))
 
     async def lazy_atransform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
-    ) -> Generator[Document, None, None]:
-
+        self, documents: Sequence[Document], **kwargs: Any
+    ) -> AsyncIterator[Document]:
         """Summarize the page content of raw documents asynchronously."""
         _callbacks = kwargs.get("callbacks", None)
         outputs = await asyncio.gather(
             *[
                 self.llm_chain.apredict(
-                    **self.get_input(documents),
-                    callbacks=_callbacks
+                    **self.get_input(documents), callbacks=_callbacks
                 )
                 for doc in documents
             ]
@@ -92,11 +85,10 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
         for i, doc in enumerate(documents):
             if not outputs[i]:
                 continue
-            yield Document(page_content=outputs[i],
-                           metadata=doc.metadata)
+            yield Document(page_content=outputs[i], metadata=doc.metadata)
 
     async def atransform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         """Asynchronously transform a list of documents.
 
@@ -113,18 +105,18 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
 
     @classmethod
     def from_llm(
-            cls,
-            llm: BaseLanguageModel,
-            prompt: Optional[PromptTemplate] = None,
-            get_input: Optional[Callable[[Document], dict]] = None,
-            llm_chain_kwargs: Optional[dict] = None,
-    ) -> 'SummarizeTransformer':
+        cls,
+        llm: BaseLanguageModel,
+        prompt: Optional[PromptTemplate] = None,
+        get_input: Optional[Callable[[Document], dict]] = None,
+        llm_chain_kwargs: Optional[dict] = None,
+    ) -> "SummarizeTransformer":
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
         llm_chain = LLMChain(
             llm=llm,
-            prompt=_prompt, **(llm_chain_kwargs or {}),
+            prompt=_prompt,
+            **(llm_chain_kwargs or {}),
         )
-        return cls(llm_chain=llm_chain,
-                   get_input=_get_input)
+        return cls(llm_chain=llm_chain, get_input=_get_input)

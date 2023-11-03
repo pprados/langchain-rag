@@ -1,4 +1,4 @@
-from typing import Generator, cast, Any
+from typing import Any, Generator, cast
 
 import pytest
 from langchain.schema import Document
@@ -9,9 +9,8 @@ from langchain_rag.storage import SQLStore
 
 
 @pytest.fixture
-def sql_store() -> Generator[LocalFileStore, None, None]:
-    store = SQLStore(namespace="test",
-                     db_url="sqlite://")
+def sql_store() -> Generator[SQLStore, None, None]:
+    store = SQLStore(namespace="test", db_url="sqlite://")
     store.create_schema()
     yield store
 
@@ -35,7 +34,7 @@ def test_create_kv_store(sql_store: SQLStore) -> None:
     assert fetched_doc.metadata == {"key": "value"}
 
 
-def test_sample_sql_docstore():
+def test_sample_sql_docstore() -> None:
     # Instantiate the SQLStore with the root path
     sql_store = SQLStore(namespace="test", db_url="sqlite://")
     # sql_store = SQLStore[str, Any](namespace="test", db_url="sqlite:////tmp/test.db")
