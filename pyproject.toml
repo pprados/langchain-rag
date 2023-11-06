@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "langchain-rag"
-version = "0.0.316"
+version = "0.0.330"
 description = "This is a temporary project while I wait for my langchain [pull-request](https://github.com/langchain-ai/langchain/pull/7278) to be validated."
 authors = ["Philippe PRADOS"]
 license = "Apache 2.0"
@@ -10,7 +10,7 @@ packages = [{ include = "langchain_rag" }]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
-langchain = ">=0.0.316"
+langchain = ">=0.0.330"
 
 
 

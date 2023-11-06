@@ -40,14 +40,12 @@ package "Compressors" {
     object compression_retriever
 
     package "Filters" {
-        object cohere_rerank
         object embeddings_filter
         object long_context_reoder
     }
     compression_retriever *--> embeddings_filter
     compression_retriever --> multi_query_retriever
-    embeddings_filter --> cohere_rerank
-    cohere_rerank --> long_context_reoder
+    embeddings_filter --> long_context_reoder
 }
 object final_retriever
 final_retriever -> compression_retriever
