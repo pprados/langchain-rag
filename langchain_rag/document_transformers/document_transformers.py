@@ -1,20 +1,26 @@
 import itertools
 import sys
 from functools import partial
-from typing import Any, Iterator, Sequence, Iterable, TypeVar, Tuple, \
-    Union, AsyncIterator, Mapping
+from typing import (
+    Any,
+    AsyncIterator,
+    Iterable,
+    Iterator,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from langchain.schema import BaseDocumentTransformer, Document
-from langchain.schema.runnable import RunnableGenerator, RunnableParallel, Runnable
+from langchain.schema.runnable import RunnableGenerator, RunnableParallel
 
 from .runnable_document_transformer import RunnableGeneratorDocumentTransformer
 
 if sys.version_info.major > 3 or sys.version_info.minor > 10:
     from itertools import batched  # type: ignore[attr-defined]
 else:
-
-    T = TypeVar('T')  # Only in python 3.12
-
+    T = TypeVar("T")  # Only in python 3.12
 
     def batched(iterable: Iterable[T], n: int) -> Iterator[Tuple[T, ...]]:
         if n < 1:
@@ -23,14 +29,16 @@ else:
         while batch := tuple(itertools.islice(it, n)):
             yield batch
 
+
 BATCH_SIZE = 16
 # The Runnable interface is compatible runnable?
 _COMPATIBLE_RUNNABLE = False
 
 
 def _transform_documents_generator(
-        documents: Iterator[Document], *,
-        transformers: Sequence[RunnableGeneratorDocumentTransformer]
+    documents: Iterator[Document],
+    *,
+    transformers: Sequence[RunnableGeneratorDocumentTransformer],
 ) -> Iterator[Document]:
     Input = Union[AsyncIterator[Document], Iterator[Document]]
     steps = {
@@ -51,11 +59,12 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
         arbitrary_types_allowed = True
 
     transformers: Sequence[BaseDocumentTransformer]
-    # transformers: Sequence[RunnableGeneratorDocumentTransformer]  # FIXME: temporaire, pour tester
+    # FIXME: temporaire, pour tester
+    # transformers: Sequence[RunnableGeneratorDocumentTransformer]
     """List of document transformer that are applied in parallel."""
 
     def lazy_transform_documents(
-            self, documents: Iterator[Document], **kwargs: Any
+        self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
         """Transform an interator of documents with the list of transformations.
 
@@ -86,10 +95,12 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
                     yield doc
 
     async def alazy_transform_documents(
-            self, documents: Union[AsyncIterator[Document], Iterator[Document]],
-            **kwargs: Any
+        self,
+        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        **kwargs: Any,
     ) -> AsyncIterator[Document]:
-        """Asynchronously transform an iterator of documents with a list of transformations.
+        """Asynchronously transform an iterator of documents with a list
+        of transformations.
 
         Args:
             documents: An iterator of Documents to be transformed.

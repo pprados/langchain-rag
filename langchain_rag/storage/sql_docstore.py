@@ -2,7 +2,6 @@ import contextlib
 from pathlib import Path
 from typing import (
     Any,
-    AsyncGenerator,
     Dict,
     Generator,
     Iterator,
@@ -10,7 +9,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    TypeVar,
     Union,
 )
 
@@ -34,7 +32,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 Base = declarative_base()
 
 
-def items_equal(x:Any, y:Any) -> bool:
+def items_equal(x: Any, y: Any) -> bool:
     return x == y
 
 
@@ -50,7 +48,7 @@ class Value(Base):  # type: ignore[valid-type,misc]
     namespace: Mapped[str] = mapped_column(primary_key=True, index=True, nullable=False)
     key: Mapped[str] = mapped_column(primary_key=True, index=True, nullable=False)
     # value: Mapped[Any] = Column(type_=PickleType, index=False, nullable=False)
-    value:Any = Column("earthquake", PickleType(comparator=items_equal))
+    value: Any = Column("earthquake", PickleType(comparator=items_equal))
 
 
 class SQLStore(BaseStore[str, bytes]):
@@ -196,7 +194,8 @@ class SQLStore(BaseStore[str, bytes]):
     def yield_keys(self, *, prefix: Optional[str] = None) -> Iterator[str]:
         with self._make_session() as session:
             for v in session.query(Value).filter(  # type: ignore
-                    Value.namespace == self.namespace):
+                Value.namespace == self.namespace
+            ):
                 yield str(v.key)
             session.close()
 

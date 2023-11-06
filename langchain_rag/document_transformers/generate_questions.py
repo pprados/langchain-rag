@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from typing import Any, Callable, Dict, Optional, Sequence, cast, Iterator, Union
+from typing import Any, Callable, Dict, Iterator, Optional, Sequence, Union, cast
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
@@ -8,7 +8,8 @@ from langchain.schema import Document
 from langchain.schema.language_model import BaseLanguageModel
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer, to_async_iterator,
+    RunnableGeneratorDocumentTransformer,
+    to_async_iterator,
 )
 
 
@@ -50,9 +51,7 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
     """Callable for constructing the chain input from the query and a Document."""
 
     def lazy_transform_documents(
-            self,
-            documents: Iterator[Document],
-            **kwargs: Any
+        self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
         _callbacks = kwargs.get("callbacks", None)
         max_retry = 3
@@ -72,9 +71,10 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
             for question in output:
                 yield Document(page_content=question, metadata=doc.metadata)
 
-    async def alazy_transform_documents(
-            self, documents: Union[AsyncIterator[Document], Iterator[Document]],
-            **kwargs: Any
+    async def alazy_transform_documents(  # type: ignore
+        self,
+        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        **kwargs: Any,
     ) -> AsyncIterator[Document]:
         """Compress page content of raw documents asynchronously."""
         _callbacks = kwargs.get("callbacks", None)
@@ -90,7 +90,7 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
             }
             output = cast(
                 Sequence[str],
-                await self.llm_chain.apredict(callbacks=_callbacks, **_input)
+                await self.llm_chain.apredict(callbacks=_callbacks, **_input),
             )
             if not output:
                 continue
@@ -99,12 +99,12 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
 
     @classmethod
     def from_llm(
-            cls,
-            llm: BaseLanguageModel,
-            prompt: Optional[PromptTemplate] = None,
-            get_input: Optional[Callable[[Document], dict]] = None,
-            nb_of_questions: int = 3,
-            llm_chain_kwargs: Optional[dict] = None,
+        cls,
+        llm: BaseLanguageModel,
+        prompt: Optional[PromptTemplate] = None,
+        get_input: Optional[Callable[[Document], dict]] = None,
+        nb_of_questions: int = 3,
+        llm_chain_kwargs: Optional[dict] = None,
     ) -> "GenerateQuestionsTransformer":
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()

@@ -5,11 +5,13 @@ from typing import (
     Dict,
     List,
     Optional,
+    Sequence,
     Tuple,
     Type,
     TypeVar,
     Union,
-    cast, Sequence, )
+    cast,
+)
 
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.pydantic_v1 import BaseModel, Extra, Field
@@ -108,16 +110,14 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     If none, then the parent documents will be the raw documents passed in."""
 
     def _get_trunk_from_sub_docs(
-            self,
-            sub_docs: List[Document],
-            **kwargs: Any
+        self, sub_docs: List[Document], **kwargs: Any
     ) -> List[Document]:
         if self.chunk_transformer:
             ids = []
             for d in sub_docs:
                 if d.metadata[self.chunk_id_key] not in ids:
                     ids.append(d.metadata[self.chunk_id_key])
-            docs = cast(List[Document],self.docstore.mget(ids))
+            docs = cast(List[Document], self.docstore.mget(ids))
             result = [d for d in docs if d is not None]
         else:
             result = sub_docs
@@ -127,10 +127,10 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             return result
 
     def _update_score_of_chunk(
-            self, sub_chunks_and_score: List[Tuple[Document, float]]
+        self, sub_chunks_and_score: List[Tuple[Document, float]]
     ) -> List[Tuple[Document, float]]:
         ids = []
-        scores:Dict[str,float] = {}
+        scores: Dict[str, float] = {}
         for d, s in sub_chunks_and_score:
             if d.metadata[self.chunk_id_key] not in ids:
                 chunk_id = d.metadata[self.chunk_id_key]
@@ -146,9 +146,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         ]
 
     def _get_trunk_from_sub_docs_and_score(
-            self,
-            sub_docs_and_score: List[Tuple[Document, float]],
-            **kwargs: Any
+        self, sub_docs_and_score: List[Tuple[Document, float]], **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         if self.chunk_transformer:
             result = self._update_score_of_chunk(sub_docs_and_score)
@@ -167,7 +165,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             """Retrieve from a set of multiple embeddings for the same document."""
 
             def _get_relevant_documents(
-                    me, query: str, *, run_manager: CallbackManagerForRetrieverRun
+                me, query: str, *, run_manager: CallbackManagerForRetrieverRun
             ) -> List[Document]:
                 """Get documents relevant to a query.
                 Args:
@@ -189,11 +187,11 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         )
 
     def add_documents(
-            self,
-            documents: List[Document],
-            *,  # FIXME: lazy ?
-            ids: Optional[List[str]] = None,
-            **kwargs: Any,
+        self,
+        documents: List[Document],
+        *,  # FIXME: lazy ?
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> List[str]:
         """Adds documents to the docstore and vectorstores.
 
@@ -243,7 +241,8 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             # TODO Check if all documents has en id
 
             chunk_documents = list(
-                self.parent_transformer.transform_documents(documents))
+                self.parent_transformer.transform_documents(documents)
+            )
         else:
             chunk_documents = documents
 
@@ -306,7 +305,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             # Then, it's possible to remove/update all chunk when the parent document
             # was updated.
             # Save the parent association wih all chunk
-            ids=cast(List[str],ids)
+            ids = cast(List[str], ids)
             mset_values: List[Tuple[str, List[str]]] = []
             for parent_id, doc in zip(ids, documents):
                 mset_values.append((parent_id, chunk_ids_for_doc[parent_id]))
@@ -316,7 +315,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             return chunk_ids
 
     async def aadd_documents(
-            self, documents: List[Document], **kwargs: Any
+        self, documents: List[Document], **kwargs: Any
     ) -> List[str]:
         # TODO:
         raise NotImplementedError("aadd_documents not implemented")
@@ -328,10 +327,10 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             if not ids:
                 raise ValueError("ids must be set")
             lists_of_chunk_by_doc_ids = cast(List[List[str]], self.docstore.mget(ids))
-            chunk_by_doc_ids:List[str] = []
-            for l in lists_of_chunk_by_doc_ids:
-                if l:
-                    chunk_by_doc_ids.extend([id for id in l])
+            chunk_by_doc_ids: List[str] = []
+            for list_of_ids in lists_of_chunk_by_doc_ids:
+                if list_of_ids:
+                    chunk_by_doc_ids.extend([id for id in list_of_ids])
         else:
             chunk_by_doc_ids = ids
 
@@ -358,24 +357,24 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return False
 
     async def adelete(
-            self, ids: Optional[List[str]] = None, **kwargs: Any
+        self, ids: Optional[List[str]] = None, **kwargs: Any
     ) -> Optional[bool]:
         # TODO
         raise NotImplementedError("adelete not implemented")
 
     @classmethod
     def from_texts(
-            cls: Type[VST],
-            texts: List[str],
-            embedding: Embeddings,
-            metadatas: Optional[List[dict]] = None,
-            **kwargs: Any,
+        cls: Type[VST],
+        texts: List[str],
+        embedding: Embeddings,
+        metadatas: Optional[List[dict]] = None,
+        **kwargs: Any,
     ) -> VST:
         raise NotImplementedError("from_texts not implemented")
 
     # %% FIXME
     def _trunk_k(
-            self, result: List[Document], kwargs: Dict[str, Any]
+        self, result: List[Document], kwargs: Dict[str, Any]
     ) -> List[Document]:
         if "k" in kwargs:
             return result[: kwargs["k"]]
@@ -390,25 +389,26 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, **kwargs)
 
     async def asearch(
-            self, query: str, search_type: str, **kwargs: Any
+        self, query: str, search_type: str, **kwargs: Any
     ) -> List[Document]:
         return await self.vectorstore.asearch(
             query=query, search_type=search_type, **kwargs
         )
 
     def similarity_search(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
         return self.search(query=query, search_type="similarity", k=k, **kwargs)
 
     async def asimilarity_search(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
         return await self.asimilarity_search(
-            query=query, search_type="similarity", k=k, **kwargs)
+            query=query, search_type="similarity", k=k, **kwargs
+        )
 
     def similarity_search_with_score(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         _search_kwargs = {**kwargs, **self.search_kwargs}
         subdocs_and_score = self.vectorstore.similarity_search_with_score(
@@ -417,15 +417,15 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
 
     async def asimilarity_search_with_score(
-            self, *args: Any, **kwargs: Any
+        self, *args: Any, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         raise NotImplementedError("Not yet")
 
     def similarity_search_with_relevance_scores(
-            self,
-            query: str,
-            k: int = 4,
-            **kwargs: Any,
+        self,
+        query: str,
+        k: int = 4,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         _search_kwargs = {**kwargs, **self.search_kwargs}
         subdocs_and_score = self.vectorstore.similarity_search_with_relevance_scores(
@@ -434,17 +434,18 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
 
     async def asimilarity_search_with_relevance_scores(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         # _search_kwargs = {**kwargs, **self.search_kwargs}
-        # subdocs_and_score = await self.vectorstore.asimilarity_search_with_relevance_scores(
+        # subdocs_and_score = await self.vectorstore.
+        # asimilarity_search_with_relevance_scores(
         #     query=query, _search_kwargs
         # )
         # return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, **kwargs)
         raise NotImplementedError("Not yet")
 
     def similarity_search_by_vector(
-            self, embedding: List[float], k: int = 4, **kwargs: Any
+        self, embedding: List[float], k: int = 4, **kwargs: Any
     ) -> List[Document]:
         subdocs = self.vectorstore.similarity_search_by_vector(
             embedding=embedding, k=k, **kwargs
@@ -452,7 +453,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     async def asimilarity_search_by_vector(
-            self, embedding: List[float], k: int = 4, **kwargs: Any
+        self, embedding: List[float], k: int = 4, **kwargs: Any
     ) -> List[Document]:
         subdocs = await self.vectorstore.asimilarity_search_by_vector(
             embedding=embedding, k=k, **kwargs
@@ -460,12 +461,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     def max_marginal_relevance_search(
-            self,
-            query: str,
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            **kwargs: Any,
+        self,
+        query: str,
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        **kwargs: Any,
     ) -> List[Document]:
         subdocs = self.vectorstore.max_marginal_relevance_search(
             query=query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
@@ -473,12 +474,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     async def amax_marginal_relevance_search(
-            self,
-            query: str,
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            **kwargs: Any,
+        self,
+        query: str,
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        **kwargs: Any,
     ) -> List[Document]:
         subdocs = await self.vectorstore.amax_marginal_relevance_search(
             query=query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
@@ -489,12 +490,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         )
 
     def max_marginal_relevance_search_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            **kwargs: Any,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        **kwargs: Any,
     ) -> List[Document]:
         subdocs = self.vectorstore.max_marginal_relevance_search_by_vector(
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
@@ -502,12 +503,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     async def amax_marginal_relevance_search_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            **kwargs: Any,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        **kwargs: Any,
     ) -> List[Document]:
         subdocs = await self.vectorstore.amax_marginal_relevance_search_by_vector(
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
@@ -516,12 +517,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
     @staticmethod
     def from_vs_in_memory(
-            vectorstore: VectorStore,
-            *,
-            chunk_transformer: Optional[BaseDocumentTransformer] = None,
-            parent_transformer: Optional[BaseDocumentTransformer] = None,
-            source_id_key: str = "source",
-            **kwargs: Dict[str, Any],
+        vectorstore: VectorStore,
+        *,
+        chunk_transformer: Optional[BaseDocumentTransformer] = None,
+        parent_transformer: Optional[BaseDocumentTransformer] = None,
+        source_id_key: str = "source",
+        **kwargs: Dict[str, Any],
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.storage import InMemoryStore
 
@@ -547,14 +548,14 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
     @staticmethod
     def from_vs_in_sql(
-            vectorstore: VectorStore,
-            db_url: str,
-            namespace: str = "rag_vectorstore",
-            *,
-            chunk_transformer: Optional[BaseDocumentTransformer] = None,
-            parent_transformer: Optional[BaseDocumentTransformer] = None,
-            source_id_key: str = "source",
-            **kwargs: Dict[str, Any],
+        vectorstore: VectorStore,
+        db_url: str,
+        namespace: str = "rag_vectorstore",
+        *,
+        chunk_transformer: Optional[BaseDocumentTransformer] = None,
+        parent_transformer: Optional[BaseDocumentTransformer] = None,
+        source_id_key: str = "source",
+        **kwargs: Dict[str, Any],
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.indexes import SQLRecordManager
 

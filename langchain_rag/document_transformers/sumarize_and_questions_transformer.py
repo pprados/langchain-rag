@@ -1,16 +1,26 @@
 import copy
-from typing import Any, Callable, Dict, List, Optional, cast, \
-    Iterator, Union, AsyncIterator
+from typing import (
+    Any,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Union,
+    cast,
+)
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import PromptTemplate
 from langchain.pydantic_v1 import BaseModel
-from langchain.schema import Document, BaseOutputParser
+from langchain.schema import BaseOutputParser, Document
 from langchain.schema.language_model import BaseLanguageModel
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer, to_async_iterator,
+    RunnableGeneratorDocumentTransformer,
+    to_async_iterator,
 )
 
 
@@ -29,16 +39,19 @@ class _SummarizeAndQuestions(BaseModel):
 
 
 _default_parser: BaseOutputParser = PydanticOutputParser(
-    pydantic_object=_SummarizeAndQuestions)
+    pydantic_object=_SummarizeAndQuestions
+)
 
-_default_template = """
-1. Given a text input, generate {nb_of_questions} questions from it in the same language. 
-2. Sumarize a text input in the same language. 
-Context:
-```
-{context}
-```
-{format_instructions}"""
+_default_template = (
+    "1. Given a text input, generate {nb_of_questions} questions from it in "
+    "the same language. "
+    "2. Sumarize a text input in the same language.\n"
+    "Context:\n"
+    "```\n"
+    "{context}\n"
+    "```\n"
+    "{format_instructions}\n"
+)
 
 
 def _get_default_chain_prompt() -> PromptTemplate:
@@ -59,9 +72,7 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
     nb_of_questions: int = 3
 
     def lazy_transform_documents(
-            self,
-            documents: Iterator[Document],
-            **kwargs: Any
+        self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
         """Compress page content of raw documents."""
         _callbacks = kwargs.get("callbacks", None)
@@ -86,8 +97,9 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
                 yield Document(page_content=q, metadata=metadata)
 
     async def alazy_transform_documents(  # type:ignore
-            self, documents: Union[AsyncIterator[Document], Iterator[Document]],
-            **kwargs: Any
+        self,
+        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        **kwargs: Any
     ) -> AsyncIterator[Document]:
         """Compress page content of raw documents."""
         _callbacks = kwargs.get("callbacks", None)
@@ -101,9 +113,9 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
                 **self.get_input(doc),
                 **{"nb_of_questions": self.nb_of_questions},
             }
-            output = await cast(
+            output = cast(
                 _SummarizeAndQuestions,
-                self.llm_chain.apredict(
+                await self.llm_chain.apredict(
                     callbacks=_callbacks,
                     **_input,
                 ),
@@ -118,12 +130,12 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
 
     @classmethod
     def from_llm(
-            cls,
-            llm: BaseLanguageModel,
-            prompt: Optional[PromptTemplate] = None,
-            get_input: Optional[Callable[[Document], dict]] = None,
-            nb_of_questions: int = 3,
-            llm_chain_kwargs: Optional[dict] = None,
+        cls,
+        llm: BaseLanguageModel,
+        prompt: Optional[PromptTemplate] = None,
+        get_input: Optional[Callable[[Document], dict]] = None,
+        nb_of_questions: int = 3,
+        llm_chain_kwargs: Optional[dict] = None,
     ) -> "SummarizeAndQuestionsTransformer":
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()

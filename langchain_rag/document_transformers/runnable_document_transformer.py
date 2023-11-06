@@ -1,8 +1,6 @@
-import asyncio
-from abc import abstractmethod, ABC
+from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from typing import Any, Iterator, Optional, Sequence, Union, \
-    Iterable, TypeVar
+from typing import Any, Iterable, Iterator, Optional, Sequence, TypeVar, Union
 
 from langchain.schema import BaseDocumentTransformer, Document
 from langchain.schema.runnable import RunnableConfig, RunnableSerializable
@@ -48,39 +46,41 @@ async def to_async_iterator(iterator: Iterable[T]) -> AsyncIterator[T]:
 class RunnableGeneratorDocumentTransformer(
     RunnableSerializable[
         Union[AsyncIterator[Document], Iterator[Document]],  # input
-        Union[AsyncIterator[Document], Iterator[Document]]  # output
+        Union[AsyncIterator[Document], Iterator[Document]],  # output
     ],
     BaseDocumentTransformer,
-    ABC
+    ABC,
 ):
     """
     Runnable Document Transformer with lazy transformation.
 
-    This class is a transition class for proposing lazy transformers, compatible with LCEL.
+    This class is a transition class for proposing lazy transformers,
+    compatible with LCEL.
     Later, it can be integrated into BaseDocumentTransformer
     if you agree to add a lazy approach to transformations.
     All subclass of BaseDocumentTransformer must be updated to be compatible with this.
     """
 
     def transform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         # Convert lazy to classical transformation
         return list(self.lazy_transform_documents(iter(documents), **kwargs))
 
     async def atransform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         # Convert lazy to classical transformation
         return [
             doc
-            async for doc in
-                self.alazy_transform_documents(iter(documents), **kwargs)  # type:ignore
+            async for doc in self.alazy_transform_documents(
+                iter(documents), **kwargs
+            )  # type:ignore
         ]
 
     @abstractmethod
     def lazy_transform_documents(
-            self, documents: Iterator[Document], **kwargs: Any
+        self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
         """Transform an interator of documents.
 
@@ -94,8 +94,9 @@ class RunnableGeneratorDocumentTransformer(
 
     @abstractmethod
     async def alazy_transform_documents(
-            self, documents: Union[AsyncIterator[Document], Iterator[Document]],
-            **kwargs: Any
+        self,
+        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        **kwargs: Any,
     ) -> AsyncIterator[Document]:
         """Asynchronously transform an iterator of documents.
 
@@ -108,10 +109,10 @@ class RunnableGeneratorDocumentTransformer(
         raise NotImplementedError()
 
     def invoke(
-            self,
-            input: Union[AsyncIterator[Document], Iterator[Document]],
-            config: Optional[RunnableConfig] = None,
-            **kwargs: Any,
+        self,
+        input: Union[AsyncIterator[Document], Iterator[Document]],
+        config: Optional[RunnableConfig] = None,
+        **kwargs: Any,
     ) -> Union[AsyncIterator[Document], Iterator[Document]]:
         if isinstance(input, AsyncIterator):
             raise ValueError("Use ainvoke with async iterator")
@@ -124,10 +125,10 @@ class RunnableGeneratorDocumentTransformer(
         return iter(self.transform_documents(list(input), **config))
 
     async def ainvoke(
-            self,
-            input: Union[Iterable[Document], AsyncIterator[Document]],
-            config: Optional[RunnableConfig] = None,
-            **kwargs: Optional[Any],
+        self,
+        input: Union[Iterable[Document], AsyncIterator[Document]],
+        config: Optional[RunnableConfig] = None,
+        **kwargs: Optional[Any],
     ) -> Union[AsyncIterator[Document], Iterator[Document]]:
         # # Default implementation, without generator
         config = config or {}
@@ -137,22 +138,24 @@ class RunnableGeneratorDocumentTransformer(
 class RunnableDocumentTransformer(
     RunnableSerializable[Sequence[Document], Sequence[Document]],
     BaseDocumentTransformer,
-    ABC
+    ABC,
 ):
     """
     Runnable Document Transformer with lazy transformation.
-    This class is a transition class for proposing lazy transformers, compatible with LCEL.
+    This class is a transition class for proposing lazy transformers,
+    compatible with LCEL.
     Later, it can be integrated into BaseDocumentTransformer
     if you refuse to add a lazy approach to transformations.
     All subclass of BaseDocumentTransformer must be updated to be compatible with this.
     """
+
     """  # FIXME
     Now, it's possible to create a chain of transformations
     (only if the transformation is compatible with `RunnableDocumentTransformer`)
     """
 
     def invoke(
-            self, input: Sequence[Document], config: Optional[RunnableConfig] = None
+        self, input: Sequence[Document], config: Optional[RunnableConfig] = None
     ) -> Sequence[Document]:
         config = config or {}
         return self.transform_documents(
@@ -161,10 +164,10 @@ class RunnableDocumentTransformer(
         )
 
     async def ainvoke(
-            self,
-            input: Sequence[Document],
-            config: Optional[RunnableConfig] = None,
-            **kwargs: Optional[Any],
+        self,
+        input: Sequence[Document],
+        config: Optional[RunnableConfig] = None,
+        **kwargs: Optional[Any],
     ) -> Sequence[Document]:
         config = config or {}
         return await self.atransform_documents(input, **config)

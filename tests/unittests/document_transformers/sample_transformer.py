@@ -1,32 +1,36 @@
 import copy
-from typing import Iterator, Any, AsyncIterator, Union, Sequence, Callable
+from typing import Any, AsyncIterator, Callable, Iterator, Sequence, Union
 
 from langchain.schema import Document
 
-from langchain_rag.document_transformers.runnable_document_transformer import \
-    RunnableGeneratorDocumentTransformer, to_async_iterator, RunnableDocumentTransformer
+from langchain_rag.document_transformers.runnable_document_transformer import (
+    RunnableDocumentTransformer,
+    RunnableGeneratorDocumentTransformer,
+    to_async_iterator,
+)
 
 
 class _LazyTransformer(RunnableGeneratorDocumentTransformer):
-    """ Implementation of a runnable transformer, with lazy transformation """
+    """Implementation of a runnable transformer, with lazy transformation"""
 
     fn: Callable[[Any], str]
 
     def lazy_transform_documents(
-            self,
-            documents: Iterator[Document],
-            **kwargs: Any
+        self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
-        return (Document(page_content=self.fn(doc.page_content),
-                         metadata=copy.deepcopy(doc.metadata))
-                for doc in documents)
+        return (
+            Document(
+                page_content=self.fn(doc.page_content),
+                metadata=copy.deepcopy(doc.metadata),
+            )
+            for doc in documents
+        )
 
     async def alazy_transform_documents(  # type:ignore
-            self,
-            documents: Union[AsyncIterator[Document], Iterator[Document]],
-            **kwargs: Any
+        self,
+        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        **kwargs: Any
     ) -> AsyncIterator[Document]:
-
         if isinstance(documents, AsyncIterator):
             async_documents = documents
         else:
@@ -35,23 +39,28 @@ class _LazyTransformer(RunnableGeneratorDocumentTransformer):
         async for doc in async_documents:
             yield Document(
                 page_content=self.fn(doc.page_content),
-                metadata=copy.deepcopy(doc.metadata))
+                metadata=copy.deepcopy(doc.metadata),
+            )
 
 
 class _Transformer(RunnableDocumentTransformer):
-    """ Implementation of a runnable transformer, without lazy transformation """
+    """Implementation of a runnable transformer, without lazy transformation"""
 
     fn: Callable[[Any], str]
 
     def transform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
-        return [Document(page_content=self.fn(doc.page_content),
-                         metadata=copy.deepcopy(doc.metadata))
-                for doc in documents]
+        return [
+            Document(
+                page_content=self.fn(doc.page_content),
+                metadata=copy.deepcopy(doc.metadata),
+            )
+            for doc in documents
+        ]
 
     async def atransform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         return self.transform_documents(documents=documents, **kwargs)
 
@@ -74,4 +83,3 @@ class LowerLazyTransformer(_LazyTransformer):
 class LowerTransformer(_Transformer):
     def __init__(self, **kwargs: Any):
         super().__init__(fn=str.lower, **kwargs)
-

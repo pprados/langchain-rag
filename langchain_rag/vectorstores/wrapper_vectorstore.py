@@ -1,4 +1,4 @@
-from typing import Any, Generic, Iterable, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Iterable, List, Optional, Tuple, TypeVar
 
 from langchain.schema import Document
 from langchain.schema.embeddings import Embeddings
@@ -207,7 +207,7 @@ def _hack() -> None:
 
     old_get_builtin_translator = to_patch._get_builtin_translator
 
-    def patch_get_builtin_translator(vectorstore:VectorStore) -> Any:
+    def patch_get_builtin_translator(vectorstore: VectorStore) -> Any:
         if isinstance(vectorstore, WrapperVectorStore):
             return patch_get_builtin_translator(vectorstore.vectorstore)
         return old_get_builtin_translator(vectorstore)

@@ -5,7 +5,7 @@ from langchain.indexes.base import RecordManager
 
 
 class MemoryRecordManager(RecordManager):
-    def __init__(self, namespace:str):
+    def __init__(self, namespace: str):
         super().__init__(namespace=namespace)
 
     def create_schema(self) -> None:

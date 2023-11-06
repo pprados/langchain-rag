@@ -116,11 +116,9 @@ CALLBACKS = []
 
 
 def pretty_print_docs(
-    docs: Union[str, List[Document]],
-        metadatas:Sequence[str],
-        kind: str = "Variations"
+    docs: Union[str, List[Document]], metadatas: Sequence[str], kind: str = "Variations"
 ) -> None:
-    def print_metadata(d:Document) -> str:
+    def print_metadata(d: Document) -> str:
         s = ",\n".join(
             [f"{metadata}={repr(d.metadata.get(metadata))}" for metadata in metadatas]
         )
@@ -128,7 +126,7 @@ def pretty_print_docs(
             return f"\n\033[92m{s}\033[0m"
         return ""
 
-    def print_doc(d:Document, i:int) -> str:
+    def print_doc(d: Document, i: int) -> str:
         r = f"\033[94m{kind} {i + 1}:\n{d.page_content[:80]}"
         if len(d.page_content) > 80:
             r += f"...[:{max(0, len(d.page_content) - 80)}]"
@@ -325,8 +323,9 @@ chain = RetrievalQAWithReferencesChain.from_chain_type(
 )
 result = chain(query)
 print(result["answer"])
-pretty_print_docs(cast(List[Document],result["source_documents"]),
-                  ["source"], kind="Chunk")
+pretty_print_docs(
+    cast(List[Document], result["source_documents"]), ["source"], kind="Chunk"
+)
 
 # %% Use RetrievalQAWithReferencesAndVerbatimsChain
 from langchain_qa_with_references.chains import (
@@ -341,9 +340,9 @@ chain = RetrievalQAWithReferencesAndVerbatimsChain.from_chain_type(
 )
 result = chain(query)
 print(result["answer"])
-pretty_print_docs(cast(List[Document],
-                       result["source_documents"]),
-                  ["source", "verbatims"])
+pretty_print_docs(
+    cast(List[Document], result["source_documents"]), ["source", "verbatims"]
+)
 print(chain(query)["answer"])
 print(chain(query)["answer"])
 print(chain(query)["answer"])
