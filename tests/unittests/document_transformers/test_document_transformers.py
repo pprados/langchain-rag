@@ -37,7 +37,7 @@ def test_document_transformers(cls: Type) -> None:
 
 
 @pytest.mark.skipif(not _COMPATIBLE_RUNNABLE,
-                    reason="Test future runnable transformation")
+                    reason="Test *future* runnable transformation")
 @pytest.mark.parametrize("cls", [(UpperLazyTransformer, LowerLazyTransformer),
                                  (UpperTransformer, LowerTransformer)])
 def test_document_transformers_runnable(cls: Tuple[Type, Type]) -> None:

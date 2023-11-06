@@ -22,4 +22,5 @@ class CopyDocumentTransformer(RunnableGeneratorDocumentTransformer):
             async_documents = documents
         else:
             async_documents = to_async_iterator(documents)
-        return async_documents
+        async for doc in async_documents:
+            yield copy.deepcopy(doc)

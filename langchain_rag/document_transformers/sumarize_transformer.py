@@ -51,7 +51,6 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
     def lazy_transform_documents(
             self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
-        """Compress page content of raw documents."""
         _callbacks = kwargs.get("callbacks", None)
         for doc in documents:
             _input = self.get_input(doc)
@@ -61,55 +60,51 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
             metadata = copy.deepcopy(doc.metadata)
             metadata["transformer"] = self.__class__.__name__
             yield Document(
-                page_content="SUMMARY:\n" + str(output), metadata=metadata  # FIXME
+                page_content="SUMMARY:\n" + str(output).strip(),
+                metadata=metadata
             )
-
-    def transform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
-    ) -> Sequence[Document]:
-        return list(self.lazy_transform_documents(documents=iter(documents), **kwargs))
-
+    #
+    # def transform_documents(
+    #         self, documents: Sequence[Document], **kwargs: Any
+    # ) -> Sequence[Document]:
+    #     return list(self.lazy_transform_documents(documents=iter(documents), **kwargs))
+    #
     async def alazy_transform_documents(  # type:ignore
             self, documents: Union[AsyncIterator[Document], Iterator[Document]],
             **kwargs: Any
     ) -> AsyncIterator[Document]:
-        """Summarize the page content of raw documents asynchronously."""
         _callbacks = kwargs.get("callbacks", None)
         if isinstance(documents, AsyncIterator):
             async_documents = cast(AsyncIterator[Document], documents)
         else:
             async_documents = to_async_iterator(documents)
-
-        outputs = await asyncio.gather(
-            *[
-                self.llm_chain.apredict(
-                    **self.get_input(doc), callbacks=_callbacks
-                )
-                async for doc in async_documents
-            ]
-        )
-        i = 0
         async for doc in async_documents:
-            if not outputs[i]:
+            _input = self.get_input(doc)
+            output = await self.llm_chain.apredict(callbacks=_callbacks, **_input)
+            if not output:
                 continue
-            yield Document(page_content=outputs[i], metadata=doc.metadata)
-            i += 1
-
-    async def atransform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
-    ) -> Sequence[Document]:
-        """Asynchronously transform a list of documents.
-
-        Args:
-            documents: A sequence of Documents to be transformed.
-
-        Returns:
-            A list of transformed Documents.
-        """
-        # FIXME: a tester. Lazy ?
-        return await asyncio.get_running_loop().run_in_executor(
-            None, partial(self.transform_documents, **kwargs), documents
-        )
+            metadata = copy.deepcopy(doc.metadata)
+            metadata["transformer"] = self.__class__.__name__
+            yield Document(
+                page_content="SUMMARY:\n" + str(output).strip(),
+                metadata=metadata
+            )
+    #
+    # async def atransform_documents(
+    #         self, documents: Sequence[Document], **kwargs: Any
+    # ) -> Sequence[Document]:
+    #     """Asynchronously transform a list of documents.
+    #
+    #     Args:
+    #         documents: A sequence of Documents to be transformed.
+    #
+    #     Returns:
+    #         A list of transformed Documents.
+    #     """
+    #     # FIXME: a tester. Lazy ?
+    #     return await asyncio.get_running_loop().run_in_executor(
+    #         None, partial(self.transform_documents, **kwargs), documents
+    #     )
 
     @classmethod
     def from_llm(

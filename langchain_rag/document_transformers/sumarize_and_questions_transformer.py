@@ -1,6 +1,6 @@
 import copy
 from typing import Any, Callable, Dict, List, Optional, cast, \
-    Iterator
+    Iterator, Union, AsyncIterator
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import PydanticOutputParser
@@ -10,7 +10,7 @@ from langchain.schema import Document, BaseOutputParser
 from langchain.schema.language_model import BaseLanguageModel
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer,
+    RunnableGeneratorDocumentTransformer, to_async_iterator,
 )
 
 
@@ -21,7 +21,7 @@ def _default_get_input(doc: Document) -> Dict[str, Any]:
     }
 
 
-class SummarizeAndQuestions(BaseModel):
+class _SummarizeAndQuestions(BaseModel):
     summary: str
     """the document summary."""
     questions: List[str]
@@ -29,7 +29,7 @@ class SummarizeAndQuestions(BaseModel):
 
 
 _default_parser: BaseOutputParser = PydanticOutputParser(
-    pydantic_object=SummarizeAndQuestions)
+    pydantic_object=_SummarizeAndQuestions)
 
 _default_template = """
 1. Given a text input, generate {nb_of_questions} questions from it in the same language. 
@@ -71,8 +71,39 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
                 **{"nb_of_questions": self.nb_of_questions},
             }
             output = cast(
-                SummarizeAndQuestions,
+                _SummarizeAndQuestions,
                 self.llm_chain.predict(
+                    callbacks=_callbacks,
+                    **_input,
+                ),
+            )
+            if not output:
+                continue
+            yield Document(page_content=output.summary, metadata=doc.metadata)
+            for q in output.questions:
+                metadata = copy.deepcopy(doc.metadata)
+                metadata["transformer"] = self.__class__.__name__
+                yield Document(page_content=q, metadata=metadata)
+
+    async def alazy_transform_documents(  # type:ignore
+            self, documents: Union[AsyncIterator[Document], Iterator[Document]],
+            **kwargs: Any
+    ) -> AsyncIterator[Document]:
+        """Compress page content of raw documents."""
+        _callbacks = kwargs.get("callbacks", None)
+        if isinstance(documents, AsyncIterator):
+            async_documents = cast(AsyncIterator[Document], documents)
+        else:
+            async_documents = to_async_iterator(documents)
+
+        async for doc in async_documents:
+            _input = {
+                **self.get_input(doc),
+                **{"nb_of_questions": self.nb_of_questions},
+            }
+            output = await cast(
+                _SummarizeAndQuestions,
+                self.llm_chain.apredict(
                     callbacks=_callbacks,
                     **_input,
                 ),

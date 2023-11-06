@@ -24,7 +24,8 @@ else:
             yield batch
 
 BATCH_SIZE = 16
-_COMPATIBLE_RUNNABLE = True
+# The Runnable interface is compatible runnable?
+_COMPATIBLE_RUNNABLE = False
 
 
 def _transform_documents_generator(

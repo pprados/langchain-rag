@@ -1,8 +1,5 @@
-import asyncio
-import copy
 from collections.abc import AsyncIterator
-from functools import partial
-from typing import Any, Callable, Dict, Optional, Sequence, cast, Iterator
+from typing import Any, Callable, Dict, Optional, Sequence, cast, Iterator, Union
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
@@ -11,7 +8,7 @@ from langchain.schema import Document
 from langchain.schema.language_model import BaseLanguageModel
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer,
+    RunnableGeneratorDocumentTransformer, to_async_iterator,
 )
 
 
@@ -57,9 +54,9 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
             documents: Iterator[Document],
             **kwargs: Any
     ) -> Iterator[Document]:
-        """Compress page content of raw documents."""
         _callbacks = kwargs.get("callbacks", None)
-        for doc in documents:
+        max_retry = 3
+        for doc in documents:  # TODO: work with batch
             _input = {
                 **self.get_input(doc),
                 **{"nb_of_questions": self.nb_of_questions},
@@ -68,52 +65,37 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
                 Sequence[str], self.llm_chain.predict(callbacks=_callbacks, **_input)
             )
             if not output:
-                continue
+                if max_retry := max_retry - 1:
+                    continue
+                else:
+                    return
             for question in output:
                 yield Document(page_content=question, metadata=doc.metadata)
 
-    def transform_documents(
-            self,
-            documents: Sequence[Document],
+    async def alazy_transform_documents(
+            self, documents: Union[AsyncIterator[Document], Iterator[Document]],
             **kwargs: Any
-    ) -> Sequence[Document]:
-        return list(self.lazy_transform_documents(documents=iter(documents), **kwargs))
-
-    async def lazy_atransform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         """Compress page content of raw documents asynchronously."""
         _callbacks = kwargs.get("callbacks", None)
-        outputs = await asyncio.gather(
-            *[
-                self.llm_chain.apredict(
-                    **self.get_input(doc), callbacks=_callbacks
-                )
-                for doc in documents
-            ]
-        )
-        for i, doc in enumerate(documents):
-            if not outputs[i]:
+        if isinstance(documents, AsyncIterator):
+            async_documents = cast(AsyncIterator[Document], documents)
+        else:
+            async_documents = to_async_iterator(documents)
+
+        async for doc in async_documents:  # TODO: work with batch
+            _input = {
+                **self.get_input(doc),
+                **{"nb_of_questions": self.nb_of_questions},
+            }
+            output = cast(
+                Sequence[str],
+                await self.llm_chain.apredict(callbacks=_callbacks, **_input)
+            )
+            if not output:
                 continue
-            metadata = copy.deepcopy(doc.metadata)
-            metadata["transformer"] = self.__class__.__name__
-            yield Document(page_content=outputs[i], metadata=metadata)
-
-    async def atransform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
-    ) -> Sequence[Document]:
-        """Asynchronously transform a list of documents.
-
-        Args:
-            documents: A sequence of Documents to be transformed.
-
-        Returns:
-            A list of transformed Documents.
-        """
-        # FIXME: a tester. Lazy ?
-        return await asyncio.get_running_loop().run_in_executor(
-            None, partial(self.transform_documents, **kwargs), documents
-        )
+            for question in output:
+                yield Document(page_content=question, metadata=doc.metadata)
 
     @classmethod
     def from_llm(
