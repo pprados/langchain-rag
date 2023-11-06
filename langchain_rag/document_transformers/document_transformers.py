@@ -59,7 +59,7 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
         arbitrary_types_allowed = True
 
     transformers: Sequence[BaseDocumentTransformer]
-    # FIXME: temporaire, pour tester
+    # PPR: to test runnable
     # transformers: Sequence[RunnableGeneratorDocumentTransformer]
     """List of document transformer that are applied in parallel."""
 

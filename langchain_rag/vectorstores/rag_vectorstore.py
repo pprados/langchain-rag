@@ -126,6 +126,23 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         else:
             return result
 
+    async def _aget_trunk_from_sub_docs(
+        self, sub_docs: List[Document], **kwargs: Any
+    ) -> List[Document]:
+        if self.chunk_transformer:
+            ids = []
+            for d in sub_docs:
+                if d.metadata[self.chunk_id_key] not in ids:
+                    ids.append(d.metadata[self.chunk_id_key])
+            docs = cast(List[Document], self.docstore.mget(ids))
+            result = [d for d in docs if d is not None]
+        else:
+            result = sub_docs
+        if "k" in kwargs:
+            return result[: kwargs["k"]]
+        else:
+            return result
+
     def _update_score_of_chunk(
         self, sub_chunks_and_score: List[Tuple[Document, float]]
     ) -> List[Tuple[Document, float]]:
@@ -189,7 +206,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     def add_documents(
         self,
         documents: List[Document],
-        *,  # FIXME: lazy ?
+        *,
         ids: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[str]:
@@ -238,15 +255,13 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             ids = None
 
         if self.parent_transformer:
-            # TODO Check if all documents has en id
-
             chunk_documents = list(
                 self.parent_transformer.transform_documents(documents)
             )
         else:
             chunk_documents = documents
 
-        if chunk_ids is None:  # FIXME: vérifier tous les scénarios
+        if chunk_ids is None:
             # Generate an id for each chunk, or use the ids
             # Put the associated chunk id the the transformation.
             # Then, it's possible to retrieve the original chunk with this
@@ -269,7 +284,6 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 chunk_ids_for_doc[doc_id] = list_of_chunk_ids
 
         full_chunk_docs = []
-        # TOTRY: on call of chunk_transformer
         if not self.chunk_transformer:
             self.vectorstore.add_documents(documents=chunk_documents, ids=chunk_ids)
         else:
@@ -278,7 +292,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     Document
                 ] = self.chunk_transformer.transform_documents(
                     [chunk_doc]
-                )  # FIXME: un seul
+                )  # TODO: use multiple documents
                 # If in transformed chunk, add the id of the associated chunk
                 for transformed_chunk in all_transformed_chunk:
                     transformed_chunk.metadata[self.chunk_id_key] = chunk_id
@@ -317,7 +331,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     async def aadd_documents(
         self, documents: List[Document], **kwargs: Any
     ) -> List[str]:
-        # TODO:
+        # TODO: implement aadd_documents()
         raise NotImplementedError("aadd_documents not implemented")
 
     def delete(self, ids: Optional[List[str]] = None, **kwargs: Any) -> Optional[bool]:
@@ -359,7 +373,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     async def adelete(
         self, ids: Optional[List[str]] = None, **kwargs: Any
     ) -> Optional[bool]:
-        # TODO
+        # TODO: implement adelete()
         raise NotImplementedError("adelete not implemented")
 
     @classmethod
@@ -372,7 +386,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     ) -> VST:
         raise NotImplementedError("from_texts not implemented")
 
-    # %% FIXME
+    # %% searchs
     def _trunk_k(
         self, result: List[Document], kwargs: Dict[str, Any]
     ) -> List[Document]:
@@ -513,7 +527,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs = await self.vectorstore.amax_marginal_relevance_search_by_vector(
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
-        return self._get_trunk_from_sub_docs(subdocs)  # FIXME: async
+        return await self._aget_trunk_from_sub_docs(subdocs)
 
     @staticmethod
     def from_vs_in_memory(

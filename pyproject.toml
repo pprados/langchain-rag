@@ -23,7 +23,7 @@ playwright = "^1.28.0"
 setuptools = "^67.6.1"
 ipython = "*"
 ipykernel = "*"
-lark = "*"  # FIXME
+lark = ^1.1"
 
 [tool.poetry.group.test.dependencies]
 # The only dependencies that should be added are
