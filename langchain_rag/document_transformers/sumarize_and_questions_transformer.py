@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 import copy
 from typing import (
     Any,
@@ -140,10 +141,11 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
+        assert _prompt.output_parser
         llm_chain = LLMChain(
             llm=llm,
             prompt=_prompt,
-            output_parser=_prompt.output_parser,
+            output_parser=cast(BaseOutputParser, _prompt.output_parser),
             **(llm_chain_kwargs or {}),
         )
         return cls(

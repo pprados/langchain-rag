@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 import copy
 from collections.abc import AsyncIterator
 from typing import Any, Callable, Dict, Iterator, Optional, Union, cast
@@ -5,13 +6,12 @@ from typing import Any, Callable, Dict, Iterator, Optional, Union, cast
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
 from langchain.prompts import PromptTemplate
-from langchain.schema import Document
-from langchain.schema.language_model import BaseLanguageModel
-
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableGeneratorDocumentTransformer,
     to_async_iterator,
 )
+from langchain.schema import Document
+from langchain.schema.language_model import BaseLanguageModel
 
 
 def _default_get_input(doc: Document) -> Dict[str, Any]:

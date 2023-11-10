@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 import itertools
 import sys
 from functools import partial

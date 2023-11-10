@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "langchain-rag"
-version = "0.0.330"
+version = "0.0.333"
 description = "This is a temporary project while I wait for my langchain [pull-request](https://github.com/langchain-ai/langchain/pull/7278) to be validated."
 authors = ["Philippe PRADOS"]
 license = "Apache 2.0"
@@ -10,7 +10,8 @@ packages = [{ include = "langchain_rag" }]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
-langchain = ">=0.0.330"
+langchain = ">=0.0.333"
+jupyter = "^1.0.0"
 
 
 
@@ -23,7 +24,7 @@ playwright = "^1.28.0"
 setuptools = "^67.6.1"
 ipython = "*"
 ipykernel = "*"
-lark = ^1.1"
+lark = "^1.1"
 
 [tool.poetry.group.test.dependencies]
 # The only dependencies that should be added are
@@ -78,6 +79,17 @@ ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
 # aapply - async apply
 # unsecure - typo but part of API, decided to not bother for now
 ignore-words-list = 'momento,collison,ned,foor,reworkd,parth,whats,aapply,mysogyny,unsecure,damon,crate'
+
+[tool.ruff]
+select = [
+  "E",  # pycodestyle
+  "F",  # pyflakes
+  "I",  # isort
+]
+exclude = [
+  "tests/integration_tests/examples/non-utf8-encoding.py",
+]
+
 
 [tool.mypy]
 ignore_missing_imports = "True"

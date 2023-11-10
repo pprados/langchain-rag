@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 import hashlib
 from typing import (
     Any,
@@ -18,12 +19,14 @@ from langchain.storage import InMemoryStore
 from langchain.text_splitter import TokenTextSplitter
 from pytest_mock import MockerFixture
 
-from langchain_rag.document_transformers import DocumentTransformers
-from langchain_rag.vectorstores import RAGVectorStore
-from tests.unittests.document_transformers.sample_transformer import (
+from langchain_rag.document_transformers.document_transformers import (
+    DocumentTransformers,
+)
+from langchain_rag.vectorstores.rag_vectorstore import RAGVectorStore
+from tests.unit_tests.document_transformers.sample_transformer import (
     LowerLazyTransformer,
 )
-from tests.unittests.document_transformers.test_runnable_transformers import (
+from tests.unit_tests.document_transformers.test_runnable_transformers import (
     UpperLazyTransformer,
 )
 

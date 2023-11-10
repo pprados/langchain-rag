@@ -1,7 +1,8 @@
+# ruff: noqa: I001
 import copy
 from typing import Any, AsyncIterator, Callable, Iterator, Sequence, Union
 
-from langchain.schema import Document
+import langchain
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableDocumentTransformer,
@@ -16,10 +17,10 @@ class _LazyTransformer(RunnableGeneratorDocumentTransformer):
     fn: Callable[[Any], str]
 
     def lazy_transform_documents(
-        self, documents: Iterator[Document], **kwargs: Any
-    ) -> Iterator[Document]:
+        self, documents: Iterator[langchain.schema.Document], **kwargs: Any
+    ) -> Iterator[langchain.schema.Document]:
         return (
-            Document(
+            langchain.schema.Document(
                 page_content=self.fn(doc.page_content),
                 metadata=copy.deepcopy(doc.metadata),
             )
@@ -28,16 +29,19 @@ class _LazyTransformer(RunnableGeneratorDocumentTransformer):
 
     async def alazy_transform_documents(  # type:ignore
         self,
-        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        documents: Union[
+            AsyncIterator[langchain.schema.Document],
+            Iterator[langchain.schema.Document],
+        ],
         **kwargs: Any
-    ) -> AsyncIterator[Document]:
+    ) -> AsyncIterator[langchain.schema.Document]:
         if isinstance(documents, AsyncIterator):
             async_documents = documents
         else:
             async_documents = to_async_iterator(documents)
 
         async for doc in async_documents:
-            yield Document(
+            yield langchain.schema.Document(
                 page_content=self.fn(doc.page_content),
                 metadata=copy.deepcopy(doc.metadata),
             )
@@ -49,10 +53,10 @@ class _Transformer(RunnableDocumentTransformer):
     fn: Callable[[Any], str]
 
     def transform_documents(
-        self, documents: Sequence[Document], **kwargs: Any
-    ) -> Sequence[Document]:
+        self, documents: Sequence[langchain.schema.Document], **kwargs: Any
+    ) -> Sequence[langchain.schema.Document]:
         return [
-            Document(
+            langchain.schema.Document(
                 page_content=self.fn(doc.page_content),
                 metadata=copy.deepcopy(doc.metadata),
             )
@@ -60,8 +64,8 @@ class _Transformer(RunnableDocumentTransformer):
         ]
 
     async def atransform_documents(
-        self, documents: Sequence[Document], **kwargs: Any
-    ) -> Sequence[Document]:
+        self, documents: Sequence[langchain.schema.Document], **kwargs: Any
+    ) -> Sequence[langchain.schema.Document]:
         return self.transform_documents(documents=documents, **kwargs)
 
 

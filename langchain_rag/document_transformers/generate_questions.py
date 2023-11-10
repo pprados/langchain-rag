@@ -1,10 +1,11 @@
+# ruff: noqa: I001
 from collections.abc import AsyncIterator
 from typing import Any, Callable, Dict, Iterator, Optional, Sequence, Union, cast
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
 from langchain.prompts import PromptTemplate
-from langchain.schema import Document
+from langchain.schema import Document, BaseOutputParser
 from langchain.schema.language_model import BaseLanguageModel
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
@@ -109,10 +110,11 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
+        assert _prompt.output_parser
         llm_chain = LLMChain(
             llm=llm,
             prompt=_prompt,
-            output_parser=_prompt.output_parser,
+            output_parser=cast(BaseOutputParser, _prompt.output_parser),
             **(llm_chain_kwargs or {}),
         )
         return cls(

@@ -1,10 +1,11 @@
+# ruff: noqa: I001
 from typing import Generator, cast
 
 import pytest
 from langchain.schema import Document
 from langchain.storage._lc_store import create_kv_docstore, create_lc_store
 
-from langchain_rag.storage import SQLStore
+from langchain_rag.storage.sql_docstore import SQLStore
 
 
 @pytest.fixture

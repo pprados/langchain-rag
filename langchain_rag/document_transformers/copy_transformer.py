@@ -1,12 +1,12 @@
+# ruff: noqa: I001
 import copy
 from typing import Any, AsyncIterator, Iterator, Union
-
-from langchain.schema import Document
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableGeneratorDocumentTransformer,
     to_async_iterator,
 )
+from langchain.schema import Document
 
 
 class CopyDocumentTransformer(RunnableGeneratorDocumentTransformer):

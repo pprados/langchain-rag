@@ -1,9 +1,10 @@
+# ruff: noqa
 import logging
 import os
 import pathlib
 import shutil
 import tempfile
-from typing import *
+from typing import Any, Dict, List, Optional, Sequence, Union, cast
 
 from dotenv import load_dotenv
 from langchain.chains.query_constructor.schema import AttributeInfo
@@ -238,7 +239,8 @@ rag_vectorstore, index_kwargs = RAGVectorStore.from_vs_in_sql(
 #     chunk_transformer=chunk_transformer,
 #     search_kwargs={"k": 10}
 # )
-# engine = sqlalchemy.engine.create_engine(url=f"sqlite:///{ROOT_PATH}/record_manager.db")
+# engine = sqlalchemy.engine.create_engine(
+# url=f"sqlite:///{ROOT_PATH}/record_manager.db")
 # index_kwargs = {
 #     "record_manager": SQLRecordManager(
 #         namespace="record_manager_cache",
@@ -252,7 +254,8 @@ rag_vectorstore, index_kwargs = RAGVectorStore.from_vs_in_sql(
 # %% Import documents
 
 documents = WikipediaRetriever(
-    top_k_results=nb_documents_to_import
+    top_k_results=nb_documents_to_import,
+    wiki_client=None,
 ).get_relevant_documents("mathematic")
 
 index(docs_source=documents, cleanup="incremental", **index_kwargs)
@@ -288,10 +291,6 @@ compression_retriever = ContextualCompressionRetriever(
     base_compressor=DocumentCompressorPipeline(
         transformers=[
             EmbeddingsFilter(embeddings=embeddings, similarity_threshold=0.7),
-            CohereRerank(
-                top_n=top_k,
-                user_agent="langchain",  # FIXME: bug avec version langchain
-            ),
             LongContextReorder(),
         ]
     ),

@@ -19,6 +19,7 @@ from langchain.schema import BaseStore
 from langchain.schema.document import BaseDocumentTransformer, Document
 from langchain.schema.embeddings import Embeddings
 from langchain.schema.vectorstore import VectorStore, VectorStoreRetriever
+from langchain.storage import EncoderBackedStore
 
 from .wrapper_vectorstore import WrapperVectorStore
 
@@ -536,7 +537,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         chunk_transformer: Optional[BaseDocumentTransformer] = None,
         parent_transformer: Optional[BaseDocumentTransformer] = None,
         source_id_key: str = "source",
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.storage import InMemoryStore
 
@@ -569,19 +570,27 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         chunk_transformer: Optional[BaseDocumentTransformer] = None,
         parent_transformer: Optional[BaseDocumentTransformer] = None,
         source_id_key: str = "source",
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
+        import pickle
+
         from langchain.indexes import SQLRecordManager
 
-        from ..storage import SQLStore
+        from ..storage.sql_docstore import SQLStore
 
         record_manager = SQLRecordManager(namespace=namespace, db_url=db_url)
         record_manager.create_schema()
-        docstore = SQLStore(
+        sql_docstore = SQLStore(
             namespace=namespace,
             db_url=db_url,
         )
-        docstore.create_schema()
+        sql_docstore.create_schema()
+        docstore = EncoderBackedStore[str, Union[Document, List[str]]](
+            store=sql_docstore,
+            key_encoder=lambda x: x,
+            value_serializer=pickle.dumps,
+            value_deserializer=pickle.loads,
+        )
         vectorstore = RAGVectorStore(
             vectorstore=vectorstore,
             docstore=docstore,

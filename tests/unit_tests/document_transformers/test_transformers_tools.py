@@ -1,18 +1,20 @@
+# ruff: noqa: I001
 from typing import Dict
 
 import pytest
-from langchain.llms import BaseLLM
-from langchain.schema import Document
+import langchain
 
-from langchain_rag.document_transformers import (
-    CopyDocumentTransformer,
+from langchain_rag.document_transformers.copy_transformer import CopyDocumentTransformer
+from langchain_rag.document_transformers.generate_questions import (
     GenerateQuestionsTransformer,
-    SummarizeTransformer,
 )
 from langchain_rag.document_transformers.sumarize_and_questions_transformer import (
     SummarizeAndQuestionsTransformer,
 )
-from tests.unittests.fake_llm import FakeLLM
+from langchain_rag.document_transformers.sumarize_transformer import (
+    SummarizeTransformer,
+)
+from tests.unit_tests.llms.fake_llm import FakeLLM
 
 TEMPERATURE = 0.0
 MAX_TOKENS = 1000
@@ -23,7 +25,7 @@ USE_CACHE = True
 def init_llm(
     queries: Dict[int, str],
     max_token: int = MAX_TOKENS,
-) -> BaseLLM:
+) -> langchain.llms.BaseLLM:
     if FAKE_LLM:
         return FakeLLM(
             queries=queries,
@@ -50,8 +52,8 @@ def init_llm(
 
 # %% copy_transformer
 def test_copy_transformer_transform_documents() -> None:
-    doc1 = Document(page_content="my test")
-    doc2 = Document(page_content="other test")
+    doc1 = langchain.schema.Document(page_content="my test")
+    doc2 = langchain.schema.Document(page_content="other test")
     result = CopyDocumentTransformer().transform_documents([doc1, doc2])
     assert len(result) == 2
     assert id(result[0]) != id(doc1)
@@ -61,8 +63,8 @@ def test_copy_transformer_transform_documents() -> None:
 
 
 def test_copy_transformer_lazy_transform_documents() -> None:
-    doc1 = Document(page_content="my test")
-    doc2 = Document(page_content="other test")
+    doc1 = langchain.schema.Document(page_content="my test")
+    doc2 = langchain.schema.Document(page_content="other test")
     result = list(
         CopyDocumentTransformer().lazy_transform_documents(iter([doc1, doc2]))
     )
@@ -75,8 +77,8 @@ def test_copy_transformer_lazy_transform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_copy_transformer_atransform_documents() -> None:
-    doc1 = Document(page_content="my test")
-    doc2 = Document(page_content="other test")
+    doc1 = langchain.schema.Document(page_content="my test")
+    doc2 = langchain.schema.Document(page_content="other test")
     result = await CopyDocumentTransformer().atransform_documents([doc1, doc2])
     assert len(result) == 2
     assert id(result[0]) != id(doc1)
@@ -87,8 +89,8 @@ async def test_copy_transformer_atransform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_copy_transformer_alazy_transform_documents() -> None:
-    doc1 = Document(page_content="my test")
-    doc2 = Document(page_content="other test")
+    doc1 = langchain.schema.Document(page_content="my test")
+    doc2 = langchain.schema.Document(page_content="other test")
     result = [
         doc
         async for doc in CopyDocumentTransformer().alazy_transform_documents(
@@ -104,7 +106,7 @@ async def test_copy_transformer_alazy_transform_documents() -> None:
 
 # %% generate_questions
 def test_generate_questions_transform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, and 
@@ -113,7 +115,7 @@ def test_generate_questions_transform_documents() -> None:
     respectively. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -140,7 +142,7 @@ def test_generate_questions_transform_documents() -> None:
 
 
 def test_generate_questions_lazy_transform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, 
     formulas and related structures, shapes and the spaces in which they are 
@@ -149,7 +151,7 @@ def test_generate_questions_lazy_transform_documents() -> None:
     geometry, and analysis, respectively. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -177,7 +179,7 @@ def test_generate_questions_lazy_transform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_questions_atransform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, and 
@@ -186,7 +188,7 @@ async def test_generate_questions_atransform_documents() -> None:
     respectively. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -214,7 +216,7 @@ async def test_generate_questions_atransform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_questions_alazy_transform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, and 
@@ -223,7 +225,7 @@ async def test_generate_questions_alazy_transform_documents() -> None:
     respectively. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -255,14 +257,14 @@ async def test_generate_questions_alazy_transform_documents() -> None:
 
 
 def test_sumarize_transformer_transform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -284,14 +286,14 @@ def test_sumarize_transformer_transform_documents() -> None:
 
 
 def test_sumarize_transformer_lazy_transform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -314,14 +316,14 @@ def test_sumarize_transformer_lazy_transform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_sumarize_transformer_atransform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -344,14 +346,14 @@ async def test_sumarize_transformer_atransform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_sumarize_transformer_alazy_transform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -378,14 +380,14 @@ async def test_sumarize_transformer_alazy_transform_documents() -> None:
 
 
 def test_sumarize_and_questions_transformer_transform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -427,14 +429,14 @@ def test_sumarize_and_questions_transformer_transform_documents() -> None:
 
 
 def test_sumarize_and_questions_transformer_lazy_transform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -477,14 +479,14 @@ def test_sumarize_and_questions_transformer_lazy_transform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_sumarize_and_questions_transformer_atransform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
@@ -527,14 +529,14 @@ async def test_sumarize_and_questions_transformer_atransform_documents() -> None
 
 @pytest.mark.asyncio
 async def test_sumarize_and_questions_transformer_alazy_transform_documents() -> None:
-    doc1 = Document(
+    doc1 = langchain.schema.Document(
         page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
     """
     )
-    doc2 = Document(
+    doc2 = langchain.schema.Document(
         page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'

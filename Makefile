@@ -134,33 +134,64 @@ else
 
 endif
 
+LANGCHAIN_HOME=../langchain
+TARGET:=langchain
+SRC_PACKAGE=langchain_rag
+DST_PACKAGE=langchain
+SRC_MODULE:=langchain-rag
+DST_MODULE:=langchain
 
-sync:
-	cp -rf ../langchain/libs/experimental/langchain_experimental/chains/qa_with_references/ \
+define _push_sync
+	@$(eval TARGET=$(TARGET))
+	@$(eval SRC_PACKAGE=$(SRC_PACKAGE))
+	@$(eval DST_PACKAGE=$(DST_PACKAGE))
+	@$(eval WORK_DIR=$(shell mktemp -d --suffix ".rsync"))
+	@mkdir -p "${WORK_DIR}/libs/${TARGET}"
+	@mkdir -p "${WORK_DIR}/docs/docs"
+	@echo Copy and patch $(SRC_PACKAGE) to $(DST_PACKAGE) in $(LANGCHAIN_HOME)
+	@( \
+		cd $(SRC_PACKAGE)/ ; \
+		rsync -a \
+		  --exclude ".*" \
+		  --exclude __pycache__ \
+		  --exclude __init__.py \
+		  . "${WORK_DIR}/libs/${TARGET}/$(DST_PACKAGE)" ; \
+	)
+	@( \
+		cd tests/ ; \
+		rsync -a \
+		  --exclude ".*" \
+		  --exclude __pycache__ \
+		  --exclude __init__.py \
+		  . "${WORK_DIR}/libs/${TARGET}/tests" ; \
+	)
+	@( \
+		cd docs/ ; \
+		rsync -a \
+		  --exclude ".*" \
+		  . "${WORK_DIR}/docs/docs" ; \
+	)
+	@find '${WORK_DIR}' -type f -a \
+		-exec sed -i "s/${SRC_PACKAGE}/${DST_PACKAGE}/g" {} ';' \
+		-exec sed -i "s/pip install -q '$(SRC_MODULE)'/pip install -q '$(DST_MODULE)'/g" {} ';'
+	@cp -R "${WORK_DIR}/libs" "${WORK_DIR}/docs" $(LANGCHAIN_HOME)/
+	@rm -Rf '${WORK_DIR}'
+endef
+
+push-sync:
+	$(call _push_sync)
+
+pull-sync:
+	cp -rf $(TARGET)/langchain_experimental/chains/qa_with_references/ \
 		langchain_qa_with_references/chains/
-	cp -f ../langchain/libs/experimental/langchain_experimental/chains/__init__.py \
+	cp -f $(TARGET)/langchain_experimental/chains/__init__.py \
 		langchain_qa_with_references/chains/
-	cp -rf ../langchain/libs/experimental/langchain_experimental/chains/qa_with_references_and_verbatims/ \
+	cp -rf $(TARGET)/langchain_experimental/chains/qa_with_references_and_verbatims/ \
 		langchain_qa_with_references/chains/
-	cp -rf ../langchain/libs/experimental/tests/unit_tests/chains/ \
+	cp -rf $(TARGET)/tests/unit_tests/chains/ \
 		tests/unit_tests/
-	cp ../langchain/libs/experimental/docs/qa_with_reference*.ipynb .
+	cp $(TARGET)/docs/qa_with_reference*.ipynb .
 	find . -type f \( -name '*.py' -or -name '*.ipynb' \) | xargs sed -i 's/langchain_experimental/langchain_qa_with_references/g'
 	find . -type f -name '*.ipynb' | xargs sed -i 's/langchain\([_-]\)experimental/langchain\1qa_with_references/g'
 
-reverse-sync:
-	( cd langchain_qa_with_references/chains/ ; \
-	 find . -type f -not -iname '__init__.py' -exec cp '{}' '../../../langchain/libs/experimental/langchain_experimental/chains/{}' ';' \
-	)
 
-	( cd tests/unit_tests/chains ; \
-	 find . -type f -not -iname '__init__.py' -exec cp '{}' '../../../../langchain/libs/experimental/tests/unit_tests/chains/{}' ';' \
-	)
-	( cd tests/integration_tests/chains ; \
-	 find . -type f -not -iname '__init__.py' -name '*_qa_with_*' -exec cp '{}' '../../../../langchain/libs/experimental/tests/integration_tests/chains/{}' ';' \
-	)
-
-	cp *.ipynb ../langchain/libs/experimental/docs/qa_with_reference*.ipynb
-	find ../langchain/libs/experimental -type f \( -name '*.py' -or -name '*.ipynb' \) -exec  sed -i 's/langchain_qa_with_references/langchain_experimental/g' '{}' ';'
-	find ../langchain/libs/experimental -type f \( -name '*.py' -or -name '*.ipynb' \) -exec  sed -i 's/langchain_experimental\.pydantic_v1/langchain\.pydantic_v1/g' '{}' ';'
-	find ../langchain/libs/experimental/docs -type f -name '*.ipynb' -exec sed -i 's/langchain\([_-]\)qa_with_references/langchain\1experimental/g' '{}' ';'

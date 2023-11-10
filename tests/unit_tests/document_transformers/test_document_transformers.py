@@ -1,17 +1,17 @@
+# ruff: noqa: I001
 from typing import Tuple, Type
 
 import pytest
-from langchain.schema import Document
-
+import langchain
 from langchain_rag.document_transformers.document_transformers import (
     _COMPATIBLE_RUNNABLE,
     DocumentTransformers,
 )
-from tests.unittests.document_transformers.sample_transformer import (
+from tests.unit_tests.document_transformers.sample_transformer import (
     LowerLazyTransformer,
     LowerTransformer,
 )
-from tests.unittests.document_transformers.test_runnable_transformers import (
+from tests.unit_tests.document_transformers.test_runnable_transformers import (
     UpperLazyTransformer,
     UpperTransformer,
 )
@@ -20,8 +20,8 @@ from tests.unittests.document_transformers.test_runnable_transformers import (
 @pytest.mark.skipif(_COMPATIBLE_RUNNABLE, reason="Test only runnable transformer")
 @pytest.mark.parametrize("cls", [UpperLazyTransformer, UpperTransformer])
 def test_document_transformers(cls: Type) -> None:
-    doc1 = Document(page_content="my test")
-    doc2 = Document(page_content="other test")
+    doc1 = langchain.schema.Document(page_content="my test")
+    doc2 = langchain.schema.Document(page_content="other test")
     from langchain.text_splitter import TokenTextSplitter
 
     transfomer = DocumentTransformers(
@@ -33,12 +33,12 @@ def test_document_transformers(cls: Type) -> None:
     r = transfomer.transform_documents([doc1, doc2])
     assert len(r) == 6
     assert r == [
-        Document(page_content="my"),
-        Document(page_content=" test"),
-        Document(page_content="other"),
-        Document(page_content=" test"),
-        Document(page_content=doc1.page_content.upper()),
-        Document(page_content=doc2.page_content.upper()),
+        langchain.schema.Document(page_content="my"),
+        langchain.schema.Document(page_content=" test"),
+        langchain.schema.Document(page_content="other"),
+        langchain.schema.Document(page_content=" test"),
+        langchain.schema.Document(page_content=doc1.page_content.upper()),
+        langchain.schema.Document(page_content=doc2.page_content.upper()),
     ]
 
 
@@ -53,8 +53,8 @@ def test_document_transformers(cls: Type) -> None:
     ],
 )
 def test_document_transformers_runnable(cls: Tuple[Type, Type]) -> None:
-    doc1 = Document(page_content="my test")
-    doc2 = Document(page_content="other test")
+    doc1 = langchain.schema.Document(page_content="my test")
+    doc2 = langchain.schema.Document(page_content="other test")
     transfomer = DocumentTransformers(
         transformers=[
             cls[0](),
@@ -64,8 +64,8 @@ def test_document_transformers_runnable(cls: Tuple[Type, Type]) -> None:
     r = transfomer.transform_documents([doc1, doc2])
     assert len(r) == 4
     assert r == [
-        Document(page_content=doc1.page_content.upper()),
-        Document(page_content=doc2.page_content.upper()),
-        Document(page_content=doc1.page_content.lower()),
-        Document(page_content=doc2.page_content.lower()),
+        langchain.schema.Document(page_content=doc1.page_content.upper()),
+        langchain.schema.Document(page_content=doc2.page_content.upper()),
+        langchain.schema.Document(page_content=doc1.page_content.lower()),
+        langchain.schema.Document(page_content=doc2.page_content.lower()),
     ]

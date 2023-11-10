@@ -1,41 +1,22 @@
 from datetime import datetime
-from typing import List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from langchain.indexes.base import RecordManager
 
 
 class MemoryRecordManager(RecordManager):
+    data: List[Dict[str, Any]] = []
+
     def __init__(self, namespace: str):
         super().__init__(namespace=namespace)
 
     def create_schema(self) -> None:
-        """Create the database schema for the record manager."""
         pass
 
     async def acreate_schema(self) -> None:
-        """Create the database schema for the record manager."""
         pass
 
     def get_time(self) -> float:
-        """Get the current server time as a high resolution timestamp!
-
-        It's important to get this from the server to ensure a monotonic clock,
-        otherwise there may be data loss when cleaning up old documents!
-
-        Returns:
-            The current server time as a float timestamp.
-        """
-        return datetime.now().timestamp()
-
-    async def aget_time(self) -> float:
-        """Get the current server time as a high resolution timestamp!
-
-        It's important to get this from the server to ensure a monotonic clock,
-        otherwise there may be data loss when cleaning up old documents!
-
-        Returns:
-            The current server time as a float timestamp.
-        """
         return datetime.now().timestamp()
 
     def update(
@@ -45,60 +26,36 @@ class MemoryRecordManager(RecordManager):
         group_ids: Optional[Sequence[Optional[str]]] = None,
         time_at_least: Optional[float] = None,
     ) -> None:
-        """Upsert records into the database.
+        if group_ids is None:
+            group_ids = [None] * len(keys)
+        if len(keys) != len(group_ids):
+            raise ValueError(
+                f"Number of keys ({len(keys)}) does not match number of "
+                f"group_ids ({len(group_ids)})"
+            )
 
-        Args:
-            keys: A list of record keys to upsert.
-            group_ids: A list of group IDs corresponding to the keys.
-            time_at_least: if provided, updates should only happen if the
-              updated_at field is at least this time.
+        update_time = self.get_time()
+        if time_at_least and update_time < time_at_least:
+            # Safeguard against time sync issues
+            raise AssertionError(f"Time sync issue: {update_time} < {time_at_least}")
 
-        Raises:
-            ValueError: If the length of keys doesn't match the length of group_ids.
-        """
-        pass
-
-    async def aupdate(
-        self,
-        keys: Sequence[str],
-        *,
-        group_ids: Optional[Sequence[Optional[str]]] = None,
-        time_at_least: Optional[float] = None,
-    ) -> None:
-        """Upsert records into the database.
-
-        Args:
-            keys: A list of record keys to upsert.
-            group_ids: A list of group IDs corresponding to the keys.
-            time_at_least: if provided, updates should only happen if the
-              updated_at field is at least this time.
-
-        Raises:
-            ValueError: If the length of keys doesn't match the length of group_ids.
-        """
-        pass
+        records_to_upsert = [
+            {
+                "key": key,
+                "namespace": self.namespace,
+                "updated_at": update_time,
+                "group_id": group_id,
+            }
+            for key, group_id in zip(keys, group_ids)
+        ]
+        self.delete_keys(keys)
+        self.data.extend(records_to_upsert)
 
     def exists(self, keys: Sequence[str]) -> List[bool]:
-        """Check if the provided keys exist in the database.
-
-        Args:
-            keys: A list of keys to check.
-
-        Returns:
-            A list of boolean values indicating the existence of each key.
-        """
-        return [False] * len(keys)
-
-    async def aexists(self, keys: Sequence[str]) -> List[bool]:
-        """Check if the provided keys exist in the database.
-
-        Args:
-            keys: A list of keys to check.
-
-        Returns:
-            A list of boolean values indicating the existence of each key.
-        """
-        return [False] * len(keys)
+        return [
+            len(list(filter(lambda record: record["key"] == key, self.data))) == 1
+            for key in keys
+        ]
 
     def list_keys(
         self,
@@ -108,18 +65,42 @@ class MemoryRecordManager(RecordManager):
         group_ids: Optional[Sequence[str]] = None,
         limit: Optional[int] = None,
     ) -> List[str]:
-        """List records in the database based on the provided filters.
+        keys = [
+            record["key"]
+            for record in filter(
+                lambda record: record["namespace"] == self.namespace
+                and (not group_ids or record["group_id"] in group_ids)
+                and (not before or record["updated_at"] < before)
+                and (not after or record["updated_at"] > after),
+                self.data,
+            )
+        ]
+        return keys[:limit]
 
-        Args:
-            before: Filter to list records updated before this time.
-            after: Filter to list records updated after this time.
-            group_ids: Filter to list records with specific group IDs.
-            limit: optional limit on the number of records to return.
+    def delete_keys(self, keys: Sequence[str]) -> None:
+        self.data = list(
+            filter(
+                lambda record: record["namespace"] != self.namespace
+                or record["key"] not in keys,
+                self.data,
+            )
+        )
 
-        Returns:
-            A list of keys for the matching records.
-        """
-        return []
+    # %% Async versions
+    async def aget_time(self) -> float:
+        return datetime.now().timestamp()
+
+    async def aupdate(
+        self,
+        keys: Sequence[str],
+        *,
+        group_ids: Optional[Sequence[Optional[str]]] = None,
+        time_at_least: Optional[float] = None,
+    ) -> None:
+        return self.update(keys=keys, group_ids=group_ids, time_at_least=time_at_least)
+
+    async def aexists(self, keys: Sequence[str]) -> List[bool]:
+        return self.exists(keys=keys)
 
     async def alist_keys(
         self,
@@ -129,31 +110,9 @@ class MemoryRecordManager(RecordManager):
         group_ids: Optional[Sequence[str]] = None,
         limit: Optional[int] = None,
     ) -> List[str]:
-        """List records in the database based on the provided filters.
-
-        Args:
-            before: Filter to list records updated before this time.
-            after: Filter to list records updated after this time.
-            group_ids: Filter to list records with specific group IDs.
-            limit: optional limit on the number of records to return.
-
-        Returns:
-            A list of keys for the matching records.
-        """
-        return []
-
-    def delete_keys(self, keys: Sequence[str]) -> None:
-        """Delete specified records from the database.
-
-        Args:
-            keys: A list of keys to delete.
-        """
-        pass
+        return self.list_keys(
+            before=before, after=after, group_ids=group_ids, limit=limit
+        )
 
     async def adelete_keys(self, keys: Sequence[str]) -> None:
-        """Delete specified records from the database.
-
-        Args:
-            keys: A list of keys to delete.
-        """
-        pass
+        return self.delete_keys(keys=keys)
