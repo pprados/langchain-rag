@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 import copy
 from collections.abc import AsyncIterator
 from typing import Any, Callable, Dict, Iterator, Optional, Union, cast
@@ -69,17 +68,13 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
     #     return list(self.lazy_transform_documents(
     #     documents=iter(documents), **kwargs))
     #
-    async def alazy_transform_documents(  # type:ignore
+    async def _alazy_transform_documents(  # type:ignore
         self,
-        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        documents: AsyncIterator[Document],
         **kwargs: Any
     ) -> AsyncIterator[Document]:
         _callbacks = kwargs.get("callbacks", None)
-        if isinstance(documents, AsyncIterator):
-            async_documents = cast(AsyncIterator[Document], documents)
-        else:
-            async_documents = to_async_iterator(documents)
-        async for doc in async_documents:
+        async for doc in documents:
             _input = self.get_input(doc)
             output = await self.llm_chain.apredict(callbacks=_callbacks, **_input)
             if not output:
@@ -89,22 +84,6 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
             yield Document(
                 page_content="SUMMARY:\n" + str(output).strip(), metadata=metadata
             )
-
-    #
-    # async def atransform_documents(
-    #         self, documents: Sequence[Document], **kwargs: Any
-    # ) -> Sequence[Document]:
-    #     """Asynchronously transform a list of documents.
-    #
-    #     Args:
-    #         documents: A sequence of Documents to be transformed.
-    #
-    #     Returns:
-    #         A list of transformed Documents.
-    #     """
-    #     return await asyncio.get_running_loop().run_in_executor(
-    #         None, partial(self.transform_documents, **kwargs), documents
-    #     )
 
     @classmethod
     def from_llm(

@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 from collections.abc import AsyncIterator
 from typing import Any, Callable, Dict, Iterator, Optional, Sequence, Union, cast
 
@@ -72,19 +71,14 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
             for question in output:
                 yield Document(page_content=question, metadata=doc.metadata)
 
-    async def alazy_transform_documents(  # type: ignore
+    async def _alazy_transform_documents(  # type: ignore
         self,
-        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        documents: AsyncIterator[Document],
         **kwargs: Any,
     ) -> AsyncIterator[Document]:
         """Compress page content of raw documents asynchronously."""
         _callbacks = kwargs.get("callbacks", None)
-        if isinstance(documents, AsyncIterator):
-            async_documents = cast(AsyncIterator[Document], documents)
-        else:
-            async_documents = to_async_iterator(documents)
-
-        async for doc in async_documents:  # TODO: work with batch
+        async for doc in documents:  # TODO: work with batch
             _input = {
                 **self.get_input(doc),
                 **{"nb_of_questions": self.nb_of_questions},

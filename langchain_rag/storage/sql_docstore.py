@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 import contextlib
 from pathlib import Path
 from typing import (

@@ -2,7 +2,6 @@ from langchain_rag.document_transformers.document_transformers import (
     DocumentTransformers,
 )
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableDocumentTransformer,
     RunnableGeneratorDocumentTransformer,
 )
 

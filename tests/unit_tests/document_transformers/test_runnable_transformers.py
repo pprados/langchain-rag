@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 from typing import Tuple, Type
 
 import pytest

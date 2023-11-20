@@ -1,3 +1,4 @@
+import copy
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any, Iterable, Iterator, Optional, Sequence, TypeVar, Union
@@ -71,6 +72,11 @@ class RunnableGeneratorDocumentTransformer(
         self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         # Convert lazy to classical transformation
+        # result=[]
+        # async for doc in self.alazy_transform_documents(
+        #         iter(documents), **kwargs
+        # ):
+        #     result.append(doc)
         return [
             doc
             async for doc in self.alazy_transform_documents(
@@ -92,7 +98,15 @@ class RunnableGeneratorDocumentTransformer(
         """
         raise NotImplementedError()
 
+
     @abstractmethod
+    async def _alazy_transform_documents(  # type: ignore
+        self,
+        documents: AsyncIterator[Document],
+        **kwargs: Any
+    ) -> AsyncIterator[Document]:
+        raise NotImplementedError()
+
     async def alazy_transform_documents(
         self,
         documents: Union[AsyncIterator[Document], Iterator[Document]],
@@ -106,7 +120,13 @@ class RunnableGeneratorDocumentTransformer(
         Returns:
             An interator of transformed Documents.
         """
-        raise NotImplementedError()
+        if isinstance(documents, AsyncIterator):
+            async_documents = documents
+        else:
+            async_documents = to_async_iterator(documents)
+
+        async for doc in self._alazy_transform_documents(async_documents):
+            yield doc
 
     def invoke(
         self,

@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 import copy
 from typing import (
     Any,
@@ -97,19 +96,15 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
                 metadata["transformer"] = self.__class__.__name__
                 yield Document(page_content=q, metadata=metadata)
 
-    async def alazy_transform_documents(  # type:ignore
+    async def _alazy_transform_documents(  # type:ignore
         self,
-        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        documents: AsyncIterator[Document],
         **kwargs: Any
     ) -> AsyncIterator[Document]:
         """Compress page content of raw documents."""
         _callbacks = kwargs.get("callbacks", None)
-        if isinstance(documents, AsyncIterator):
-            async_documents = cast(AsyncIterator[Document], documents)
-        else:
-            async_documents = to_async_iterator(documents)
 
-        async for doc in async_documents:
+        async for doc in documents:
             _input = {
                 **self.get_input(doc),
                 **{"nb_of_questions": self.nb_of_questions},

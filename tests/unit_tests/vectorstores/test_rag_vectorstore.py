@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 import hashlib
 from typing import (
     Any,

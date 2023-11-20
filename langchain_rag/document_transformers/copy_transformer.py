@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 import copy
 from typing import Any, AsyncIterator, Iterator, Union
 
@@ -15,14 +14,10 @@ class CopyDocumentTransformer(RunnableGeneratorDocumentTransformer):
     ) -> Iterator[Document]:
         yield from (copy.deepcopy(doc) for doc in documents)
 
-    async def alazy_transform_documents(  # type: ignore
+    async def _alazy_transform_documents(  # type: ignore
         self,
-        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        documents: AsyncIterator[Document],
         **kwargs: Any
     ) -> AsyncIterator[Document]:
-        if isinstance(documents, AsyncIterator):
-            async_documents = documents
-        else:
-            async_documents = to_async_iterator(documents)
-        async for doc in async_documents:
+        async for doc in documents:
             yield copy.deepcopy(doc)

@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 from typing import Tuple, Type
 
 import pytest
@@ -49,7 +48,6 @@ def test_document_transformers(cls: Type) -> None:
     "cls",
     [
         (UpperLazyTransformer, LowerLazyTransformer),
-        (UpperTransformer, LowerTransformer),
     ],
 )
 def test_document_transformers_runnable(cls: Tuple[Type, Type]) -> None:
@@ -62,6 +60,36 @@ def test_document_transformers_runnable(cls: Tuple[Type, Type]) -> None:
         ]
     )
     r = transfomer.transform_documents([doc1, doc2])
+    assert len(r) == 4
+    assert r == [
+        langchain.schema.Document(page_content=doc1.page_content.upper()),
+        langchain.schema.Document(page_content=doc1.page_content.lower()),
+        langchain.schema.Document(page_content=doc2.page_content.upper()),
+        langchain.schema.Document(page_content=doc2.page_content.lower()),
+    ]
+
+
+@pytest.mark.skipif(
+    not _COMPATIBLE_RUNNABLE, reason="Test *future* runnable transformation"
+)
+@pytest.mark.parametrize(
+    "cls",
+    [
+        (UpperLazyTransformer, LowerLazyTransformer),
+        # (UpperTransformer, LowerTransformer),
+    ],
+)
+@pytest.mark.asyncio
+async def test_adocument_transformers_runnable(cls: Tuple[Type, Type]) -> None:
+    doc1 = langchain.schema.Document(page_content="my test")
+    doc2 = langchain.schema.Document(page_content="other test")
+    transfomer = DocumentTransformers(
+        transformers=[
+            cls[0](),
+            cls[1](),
+        ]
+    )
+    r = await transfomer.atransform_documents([doc1, doc2])
     assert len(r) == 4
     assert r == [
         langchain.schema.Document(page_content=doc1.page_content.upper()),

@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 from typing import Generator, cast
 
 import pytest
