@@ -27,10 +27,7 @@ class _LazyTransformer(RunnableGeneratorDocumentTransformer):
 
     async def _alazy_transform_documents(  # type:ignore
         self,
-        documents: Union[
-            AsyncIterator[langchain.schema.Document],
-            Iterator[langchain.schema.Document],
-        ],
+        documents: AsyncIterator[langchain.schema.Document],
         **kwargs: Any
     ) -> AsyncIterator[langchain.schema.Document]:
         async for doc in documents:

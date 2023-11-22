@@ -10,7 +10,7 @@ from typing import (
     Sequence,
     Tuple,
     TypeVar,
-    Union, AsyncIterable,
+    Union, AsyncIterable, no_type_check, Container, List,
 )
 
 from langchain.schema import BaseDocumentTransformer, Document
@@ -31,9 +31,8 @@ else:
         while batch := tuple(itertools.islice(it, n)):
             yield batch
 
-BATCH_SIZE = 1 # FIXME: 16
-# The Runnable interface is compatible runnable?
-_COMPATIBLE_RUNNABLE = False  # FIXME
+BATCH_SIZE = 16
+_LEGACY = True  # Use legacy langchain transformer interface
 
 
 def _transform_documents_generator(
@@ -72,10 +71,10 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
     class Config:
         arbitrary_types_allowed = True
 
-    if _COMPATIBLE_RUNNABLE:
-        transformers: Sequence[RunnableGeneratorDocumentTransformer]
-    else:
+    if _LEGACY:
         transformers: Sequence[BaseDocumentTransformer]  # type: ignore[no-redef]
+    else:
+        transformers: Sequence[RunnableGeneratorDocumentTransformer]
     """List of document transformer that are applied in parallel."""
 
     def lazy_transform_documents(
@@ -89,20 +88,22 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
         Returns:
             An iterator oftransformed Documents.
         """
-        if _COMPATIBLE_RUNNABLE:
+        if _LEGACY:
+            # Implementation when all transformers are NOT compatible with Runnable
+            # It's not compatible with lazy strategy. Load all documents and apply
+            # all transformations.
+            for batch in batched(documents, BATCH_SIZE):
+                for t in self.transformers:
+                    for doc in t.transform_documents(documents=list(batch)):
+                        yield doc
+
+        else:
             for batch in batched(documents, BATCH_SIZE):
                 for t in self.transformers:
                     for doc in t.lazy_transform_documents(iter(batch)):
                         yield doc
-        else:
-            # Implementation when all transformers are NOT compatible with Runnable
-            # It's not compatible with lazy strategy. Load all documents and apply
-            # all transformations.
-            docs = [doc for doc in documents]
-            for transformer in self.transformers:
-                for doc in transformer.transform_documents(documents=docs):
-                    yield doc
 
+    @no_type_check
     async def _alazy_transform_documents(
         self,
         documents: AsyncIterator[Document],
@@ -117,15 +118,7 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
         Returns:
             An interator of transformed Documents.
         """
-        if False: # FIXME _COMPATIBLE_RUNNABLE:
-
-            # # Get a batch of documents, then apply each transformation by batch
-            async for batch in abatched(documents, BATCH_SIZE):
-                for transformer in self.transformers:
-                    async for doc in transformer.alazy_transform_documents(iter(batch)):
-                        yield doc
-
-        else:
+        if _LEGACY:
             # Implementation when all transformers are NOT compatible with Runnable
             # It's not compatible with lazy strategy. Load all documents and apply
             # all transformations.
@@ -133,3 +126,10 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
                 for transformer in self.transformers:
                     for doc in await transformer.atransform_documents(batch):
                         yield doc
+        else:
+            # # Get a batch of documents, then apply each transformation by batch
+            async for batch in abatched(documents, BATCH_SIZE):
+                for transformer in self.transformers:
+                    async for doc in transformer.alazy_transform_documents(iter(batch)):
+                        yield doc
+
