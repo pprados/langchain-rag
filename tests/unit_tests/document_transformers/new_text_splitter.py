@@ -36,6 +36,7 @@ from langchain_rag.document_transformers.runnable_document_transformer import (
 logger = logging.getLogger(__name__)
 TS = TypeVar("TS", bound="NewTextSplitter")
 
+
 # from pydantic import model_validator
 class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
     """Interface for splitting text into chunks."""
@@ -65,6 +66,7 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
                 f"({chunk_size}), should be smaller."
             )
         return kwargs
+
     # @root_validator(pre=True)
     # def check_chunk_overlap_and_size(cls, kwargs: Dict[str, Any]) -> Dict[str, Any]:
     #     chunk_overlap = kwargs["chunk_overlap"]

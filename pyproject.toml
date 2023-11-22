@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "langchain-rag"
-version = "0.0.333"
+version = "0.0.339"
 description = "This is a temporary project while I wait for my langchain [pull-request](https://github.com/langchain-ai/langchain/pull/7278) to be validated."
 authors = ["Philippe PRADOS"]
 license = "Apache 2.0"
@@ -10,9 +10,8 @@ packages = [{ include = "langchain_rag" }]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
-langchain = ">=0.0.333"
+langchain = ">=0.0.339"
 jupyter = "^1.0.0"
-
 
 
 [tool.poetry.group.dev]
@@ -47,6 +46,8 @@ pgvector = "*"
 psycopg2-binary = "*"
 #langchain-qa_with_references = { path = "../langchain-qa_with_references", develop = true }
 langchain-qa_with_references = "^0.0.329"
+tiktoken = "^0.3.2"
+faiss-cpu = {version = "^1"}
 
 [tool.poetry.group.lint]
 optional = true

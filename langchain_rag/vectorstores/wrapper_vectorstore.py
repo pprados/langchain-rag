@@ -175,7 +175,7 @@ class WrapperVectorStore(VectorStore):
         )
 
 
-if not __name__.startswith("langchain"):
+if __name__.startswith("langchain_"):
 
     def _hack() -> None:
         """

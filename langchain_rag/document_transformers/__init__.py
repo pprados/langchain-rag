@@ -18,6 +18,5 @@ __all__ = [
     "SummarizeAndQuestionsTransformer",
     "SummarizeTransformer",
     "DocumentTransformers",
-    "RunnableDocumentTransformer",
     "RunnableGeneratorDocumentTransformer",
 ]

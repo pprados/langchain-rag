@@ -13,9 +13,10 @@ from typing import (
     Union,
     no_type_check,
 )
-from langchain.schema import BaseDocumentTransformer, Document
-from langchain.schema.runnable import RunnableConfig, Runnable
+
 from langchain.pydantic_v1 import BaseModel
+from langchain.schema import BaseDocumentTransformer, Document
+from langchain.schema.runnable import Runnable, RunnableConfig
 
 """
     We propose an alternative way of making transformers compatible with LCEL.
@@ -61,12 +62,12 @@ _TIMEOUT = 1
 
 def to_sync_iterator(async_iterable: AsyncIterator[T], maxsize: int = 0) -> Iterator[T]:
     def _run_coroutine(
-            loop: asyncio.AbstractEventLoop,
-            async_iterable: AsyncIterator[T],
-            queue: asyncio.Queue,
+        loop: asyncio.AbstractEventLoop,
+        async_iterable: AsyncIterator[T],
+        queue: asyncio.Queue,
     ) -> None:
         async def _consume_async_iterable(
-                async_iterable: AsyncIterator[T], queue: asyncio.Queue
+            async_iterable: AsyncIterator[T], queue: asyncio.Queue
         ) -> None:
             async for x in async_iterable:
                 await queue.put(x)
@@ -116,13 +117,13 @@ class RunnableGeneratorDocumentTransformer(
     """
 
     def transform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         # Convert lazy to classical transformation
         return list(self.lazy_transform_documents(iter(documents), **kwargs))
 
     async def atransform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         return [
             doc
@@ -131,7 +132,7 @@ class RunnableGeneratorDocumentTransformer(
 
     @abstractmethod
     def lazy_transform_documents(
-            self, documents: Iterator[Document], **kwargs: Any
+        self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
         """Transform an interator of documents.
 
@@ -145,15 +146,15 @@ class RunnableGeneratorDocumentTransformer(
 
     @abstractmethod
     async def _alazy_transform_documents(  # type: ignore
-            self, documents: AsyncIterator[Document], **kwargs: Any
+        self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         raise NotImplementedError()
 
     @no_type_check  # Bug in Mypy
     async def alazy_transform_documents(
-            self,
-            documents: Union[AsyncIterator[Document], Iterator[Document]],
-            **kwargs: Any,
+        self,
+        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        **kwargs: Any,
     ) -> AsyncIterator[Document]:
         """Asynchronously transform an iterator of documents.
 
@@ -172,10 +173,10 @@ class RunnableGeneratorDocumentTransformer(
             yield doc
 
     def invoke(
-            self,
-            input: Union[Iterator[Document] | AsyncIterator[Document]],
-            config: Optional[RunnableConfig] = None,
-            **kwargs: Any,
+        self,
+        input: Union[Iterator[Document] | AsyncIterator[Document]],
+        config: Optional[RunnableConfig] = None,
+        **kwargs: Any,
     ) -> Union[Iterator[Document] | AsyncIterator[Document]]:
         if isinstance(input, AsyncIterator):
             raise ValueError("Use ainvoke() with async iterator")
@@ -188,10 +189,10 @@ class RunnableGeneratorDocumentTransformer(
         return iter(self.transform_documents(list(input), **config))
 
     async def ainvoke(
-            self,
-            input: Union[Iterable[Document], AsyncIterator[Document]],
-            config: Optional[RunnableConfig] = None,
-            **kwargs: Optional[Any],
+        self,
+        input: Union[Iterable[Document], AsyncIterator[Document]],
+        config: Optional[RunnableConfig] = None,
+        **kwargs: Optional[Any],
     ) -> Union[AsyncIterator[Document], Iterator[Document]]:
         # # Default implementation, without generator
         config = config or {}
