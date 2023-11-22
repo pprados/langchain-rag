@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import sys
 from functools import partial
@@ -32,7 +33,7 @@ else:
 
 BATCH_SIZE = 1 # FIXME: 16
 # The Runnable interface is compatible runnable?
-_COMPATIBLE_RUNNABLE = True
+_COMPATIBLE_RUNNABLE = False  # FIXME
 
 
 def _transform_documents_generator(
@@ -58,36 +59,11 @@ async def abatched(iterable: AsyncIterable[T], n: int) -> AsyncIterable[Tuple[T,
     async for t in iterable:
         batch.append(t)
         if len(batch)> n:
-            yield batch
+            yield tuple(batch)
             batch.clear()
     if batch:
-        yield batch
+        yield tuple(batch)
 
-
-async def _atransform_documents_generator(
-    documents: AsyncIterator[Document],
-    *,
-    transformers: Sequence[RunnableGeneratorDocumentTransformer],
-) -> AsyncIterator[Document]:
-    Input = AsyncIterator[Document]
-    steps = {
-        f"transform_documents_{i}": transformer
-        for i, transformer in enumerate(transformers)
-    }
-    # Implementation when all transformers are compatible with Runnable
-    batch=[]
-    async for doc in documents:
-        batch.append(doc)
-        if len(batch)> BATCH_SIZE:
-            yield batch
-            batch.clear()
-    if batch:
-        yield batch
-
-    async for batch in abatched(documents, BATCH_SIZE):
-        result = await RunnableParallel[Input](steps=steps).ainvoke(batch)
-        for chunk in result["steps"].values():
-            yield chunk
 
 
 class DocumentTransformers(RunnableGeneratorDocumentTransformer):
@@ -99,7 +75,7 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
     if _COMPATIBLE_RUNNABLE:
         transformers: Sequence[RunnableGeneratorDocumentTransformer]
     else:
-        transformers: Sequence[BaseDocumentTransformer]
+        transformers: Sequence[BaseDocumentTransformer]  # type: ignore[no-redef]
     """List of document transformer that are applied in parallel."""
 
     def lazy_transform_documents(
@@ -141,19 +117,19 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
         Returns:
             An interator of transformed Documents.
         """
-        if _COMPATIBLE_RUNNABLE:
+        if False: # FIXME _COMPATIBLE_RUNNABLE:
 
             # # Get a batch of documents, then apply each transformation by batch
             async for batch in abatched(documents, BATCH_SIZE):
-                for t in self.transformers:
-                    async for doc in t.alazy_transform_documents(iter(batch)):
+                for transformer in self.transformers:
+                    async for doc in transformer.alazy_transform_documents(iter(batch)):
                         yield doc
 
         else:
             # Implementation when all transformers are NOT compatible with Runnable
             # It's not compatible with lazy strategy. Load all documents and apply
             # all transformations.
-            docs = [doc async for doc in documents]
-            for transformer in self.transformers:
-                for doc in await transformer.atransform_documents(documents=docs):
-                    yield doc
+            async for batch in abatched(documents, BATCH_SIZE):
+                for transformer in self.transformers:
+                    for doc in await transformer.atransform_documents(batch):
+                        yield doc

@@ -5,7 +5,7 @@ import re
 from abc import ABC, abstractmethod
 from functools import partial
 from itertools import cycle
-from typing import AbstractSet, AsyncIterator, Iterator, Dict
+from typing import AbstractSet, AsyncIterator, Iterator, Dict, cast
 from typing import Sequence, Any, TypeVar, Callable, List, Optional, Iterable, Union, \
     Literal, Collection, Type
 
@@ -15,7 +15,7 @@ from langchain.text_splitter import TokenTextSplitter
 
 from langchain_rag.document_transformers import RunnableGeneratorDocumentTransformer
 from langchain_rag.document_transformers.runnable_document_transformer import \
-    to_async_iterator, to_sync_iterator
+    to_sync_iterator, to_async_iterator
 
 logger = logging.getLogger(__name__)
 TS = TypeVar("TS", bound="NewTextSplitter")
@@ -73,7 +73,10 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
             self, texts: List[str], metadatas: Optional[List[dict]] = None
     ) -> List[Document]:
         """Create documents from a list of texts."""
-        return list(self.lazy_create_documents(texts, metadatas=metadatas))
+        iter_metadatas=iter(metadatas) if metadatas else None
+        return list(cast(Iterator,
+                         self.lazy_create_documents(iter(texts),
+                                                    metadatas=iter_metadatas)))
 
     def lazy_split_documents(self, documents: Iterator[Document]) -> Iterator[Document]:
         """Split documents."""
@@ -240,7 +243,8 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
             documents: AsyncIterator[Document],
             **kwargs: Any
     ) -> AsyncIterator[Document]:
-        return to_async_iterator(self.lazy_split_documents(to_sync_iterator(documents)))
+        for doc in self.lazy_split_documents(to_sync_iterator(documents)):
+            yield doc
 
 
 # %% NewCharacterTextSplitter
@@ -278,3 +282,51 @@ class NewCharacterTextSplitter(NewTextSplitter):
         splits = _split_text_with_regex(text, separator, self.keep_separator)
         separator = "" if self.keep_separator else self.separator
         return self._merge_splits(splits, separator)
+
+# class NewTokenTextSplitter(NewTextSplitter):
+#     """Splitting text to tokens using model tokenizer."""
+#
+#     encoding_name: str = "gpt2"
+#     model_name: Optional[str] = None
+#     allowed_special: Union[Literal["all"], AbstractSet[str]] = set()
+#     disallowed_special: Union[Literal["all"], Collection[str]] = "all"
+#
+#     def __init__(
+#         self,
+#         **kwargs: Any,
+#     ) -> None:
+#         """Create a new TextSplitter."""
+#         super().__init__(**kwargs)
+#         try:
+#             import tiktoken
+#         except ImportError:
+#             raise ImportError(
+#                 "Could not import tiktoken python package. "
+#                 "This is needed in order to for TokenTextSplitter. "
+#                 "Please install it with `pip install tiktoken`."
+#             )
+#
+#         if model_name is not None:
+#             enc = tiktoken.encoding_for_model(model_name)
+#         else:
+#             enc = tiktoken.get_encoding(encoding_name)
+#         self._tokenizer = enc
+#         self._allowed_special = allowed_special
+#         self._disallowed_special = disallowed_special
+#
+#     def split_text(self, text: str) -> List[str]:
+#         def _encode(_text: str) -> List[int]:
+#             return self._tokenizer.encode(
+#                 _text,
+#                 allowed_special=self._allowed_special,
+#                 disallowed_special=self._disallowed_special,
+#             )
+#
+#         tokenizer = Tokenizer(
+#             chunk_overlap=self._chunk_overlap,
+#             tokens_per_chunk=self._chunk_size,
+#             decode=self._tokenizer.decode,
+#             encode=_encode,
+#         )
+#
+#         return split_text_on_tokens(text=text, tokenizer=tokenizer)

@@ -1,7 +1,8 @@
 from typing import Tuple, Type
 
-import pytest
 import langchain
+import pytest
+
 from langchain_rag.document_transformers.document_transformers import (
     _COMPATIBLE_RUNNABLE,
     DocumentTransformers,
@@ -87,6 +88,33 @@ async def test_adocument_transformers_runnable(cls: Tuple[Type, Type]) -> None:
         ]
     )
     r = await transfomer.atransform_documents([doc1, doc2])
+    assert len(r) == 4
+    assert r == [
+        langchain.schema.Document(page_content=doc1.page_content.upper()),
+        langchain.schema.Document(page_content=doc2.page_content.upper()),
+        langchain.schema.Document(page_content=doc1.page_content.lower()),
+        langchain.schema.Document(page_content=doc2.page_content.lower()),
+    ]
+
+
+@pytest.mark.parametrize(
+    "cls",
+    [
+        (UpperLazyTransformer, LowerLazyTransformer),
+    ],
+)
+@pytest.mark.asyncio
+async def test_document_alazy_transformers_runnable(cls: Tuple[Type, Type]) -> None:
+    doc1 = langchain.schema.Document(page_content="my test")
+    doc2 = langchain.schema.Document(page_content="other test")
+    transfomer = DocumentTransformers(
+        transformers=[
+            cls[0](),
+            cls[1](),
+        ]
+    )
+    r = [doc async for doc in
+         transfomer.alazy_transform_documents(iter([doc1, doc2]))]
     assert len(r) == 4
     assert r == [
         langchain.schema.Document(page_content=doc1.page_content.upper()),

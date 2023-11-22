@@ -1,5 +1,6 @@
 """A clone of Test text splitting functionality."""
 import re
+from typing import cast, Iterator
 
 import pytest
 from langchain.docstore.document import Document
@@ -207,18 +208,20 @@ async def test_alazy_transform_documents() -> None:
     ]
     assert docs == expected_docs
 
+
 def test_invoke() -> None:
     """Test create documents method."""
     texts = ["foo bar", "baz"]
     splitter = CharacterTextSplitter(separator=" ", chunk_size=3, chunk_overlap=0)
     input_docs = [Document(page_content=text) for text in texts]
-    docs = list(splitter.invoke(input_docs))
+    docs = list(cast(Iterator, splitter.invoke(iter(input_docs))))
     expected_docs = [
         Document(page_content="foo"),
         Document(page_content="bar"),
         Document(page_content="baz"),
     ]
     assert docs == expected_docs
+
 
 @pytest.mark.asyncio
 async def test_ainvoke() -> None:
@@ -227,7 +230,7 @@ async def test_ainvoke() -> None:
     splitter = CharacterTextSplitter(separator=" ", chunk_size=3, chunk_overlap=0)
     input_docs = [Document(page_content=text) for text in texts]
     docs = []
-    async for doc in splitter.alazy_transform_documents(input_docs):
+    async for doc in splitter.alazy_transform_documents(iter(input_docs)):
         docs.append(doc)
     expected_docs = [
         Document(page_content="foo"),

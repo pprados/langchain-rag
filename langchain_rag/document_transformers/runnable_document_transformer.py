@@ -1,11 +1,9 @@
 import asyncio
-import copy
 import threading
 import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Iterable, Iterator, Optional, Sequence, TypeVar, Union
+from typing import Any, Iterable, Iterator, Optional, Sequence, TypeVar, Union, cast
 
 from langchain.schema import BaseDocumentTransformer, Document
 from langchain.schema.runnable import RunnableConfig, RunnableSerializable
@@ -47,12 +45,20 @@ async def to_async_iterator(iterator: Iterable[T]) -> AsyncIterator[T]:
     for item in iterator:
         yield item
 
-_DONE=""
-_TIMEOUT=1
-def to_sync_iterator(async_iterable: AsyncIterator[T], maxsize = 0) -> Iterator[T]:
-    def _run_coroutine(loop, async_iterable, queue):
 
-        async def _consume_async_iterable(async_iterable, queue):
+_DONE = ""
+_TIMEOUT = 1
+
+
+def to_sync_iterator(async_iterable: AsyncIterator[T],
+                     maxsize: int = 0) -> Iterator[T]:
+    def _run_coroutine(loop: asyncio.AbstractEventLoop,
+                       async_iterable: AsyncIterator[T],
+                       queue: asyncio.Queue) -> None:
+
+        async def _consume_async_iterable(
+                async_iterable: AsyncIterator[T],
+                queue: asyncio.Queue) -> None:
             async for x in async_iterable:
                 await queue.put(x)
 
@@ -60,29 +66,25 @@ def to_sync_iterator(async_iterable: AsyncIterator[T], maxsize = 0) -> Iterator[
 
         loop.run_until_complete(_consume_async_iterable(async_iterable, queue))
 
-    def sync_iterable():
-        queue = asyncio.Queue(maxsize=maxsize)
-        loop = asyncio.new_event_loop()
+    queue: asyncio.Queue[T] = asyncio.Queue(maxsize=maxsize)
+    loop = asyncio.new_event_loop()
 
-        t = threading.Thread(target=_run_coroutine, args=(loop, async_iterable, queue))
-        t.daemon = True
-        t.start()
+    t = threading.Thread(target=_run_coroutine, args=(loop, async_iterable, queue))
+    t.daemon = True
+    t.start()
 
-        while True:
-            if not queue.empty():
-                x = queue.get_nowait()
+    while True:
+        if not queue.empty():
+            x = queue.get_nowait()
 
-                if x is _DONE:
-                    break
-                else:
-                    yield x
+            if x is _DONE:
+                break
             else:
-                time.sleep(_TIMEOUT)
+                yield x
+        else:
+            time.sleep(_TIMEOUT)
 
-        t.join()
-
-    return sync_iterable()
-
+    t.join()
 
 
 # def to_sync_iterator(iterator: AsyncIterator[T]) -> Iterator[T]:
@@ -101,34 +103,34 @@ def to_sync_iterator(async_iterable: AsyncIterator[T], maxsize = 0) -> Iterator[
 #         x=queue.get()
 #         x=queue.get()
 #         x=queue.get()
-    # async def _wrapper():
-    #     async for item in iterator:
-    #         yield item
-    #
-    # with ThreadPoolExecutor(1) as executor:
-    #     loop = asyncio.get_event_loop()
-    #     task = loop.run_in_executor(executor, _wrapper)
-    #     test = asyncio.wait([task])
-    #     x=asyncio.wait([test])
-    #     x=asyncio.wait([test])
-    #     x=asyncio.wait([test])
-    #     for doc in test:
-    #         print(doc)
-        # print(test)
-        # x=loop.run_until_complete(_wrapper())
-        # x=asyncio.run(_wrapper())
+# async def _wrapper():
+#     async for item in iterator:
+#         yield item
+#
+# with ThreadPoolExecutor(1) as executor:
+#     loop = asyncio.get_event_loop()
+#     task = loop.run_in_executor(executor, _wrapper)
+#     test = asyncio.wait([task])
+#     x=asyncio.wait([test])
+#     x=asyncio.wait([test])
+#     x=asyncio.wait([test])
+#     for doc in test:
+#         print(doc)
+# print(test)
+# x=loop.run_until_complete(_wrapper())
+# x=asyncio.run(_wrapper())
 
-        # for item in asyncio.run(_wrapper()):
-        #     yield item
+# for item in asyncio.run(_wrapper()):
+#     yield item
 
-        # loop = asyncio.get_event_loop()
-    # try:
-    #     loop.run_until_complete(_wrapper())
-    # finally:
-    #     # loop.run_until_complete(loop.shutdown_asyncgens()) # see: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.shutdown_asyncgens
-    #     # loop.close()
-    #     pass
-    # return results
+# loop = asyncio.get_event_loop()
+# try:
+#     loop.run_until_complete(_wrapper())
+# finally:
+#     # loop.run_until_complete(loop.shutdown_asyncgens()) # see: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.shutdown_asyncgens
+#     # loop.close()
+#     pass
+# return results
 
 class RunnableGeneratorDocumentTransformer(
     RunnableSerializable[
@@ -149,13 +151,13 @@ class RunnableGeneratorDocumentTransformer(
     """
 
     def transform_documents(
-        self, documents: Sequence[Document], **kwargs: Any
+            self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         # Convert lazy to classical transformation
         return list(self.lazy_transform_documents(iter(documents), **kwargs))
 
     async def atransform_documents(
-        self, documents: Sequence[Document], **kwargs: Any
+            self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         # Convert lazy to classical transformation
         # result=[]
@@ -173,7 +175,7 @@ class RunnableGeneratorDocumentTransformer(
 
     @abstractmethod
     def lazy_transform_documents(
-        self, documents: Iterator[Document], **kwargs: Any
+            self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
         """Transform an interator of documents.
 
@@ -185,19 +187,18 @@ class RunnableGeneratorDocumentTransformer(
         """
         raise NotImplementedError()
 
-
     @abstractmethod
     async def _alazy_transform_documents(  # type: ignore
-        self,
-        documents: AsyncIterator[Document],
-        **kwargs: Any
+            self,
+            documents: AsyncIterator[Document],
+            **kwargs: Any
     ) -> AsyncIterator[Document]:
         raise NotImplementedError()
 
     async def alazy_transform_documents(
-        self,
-        documents: Union[AsyncIterator[Document], Iterator[Document]],
-        **kwargs: Any,
+            self,
+            documents: Union[AsyncIterator[Document], Iterator[Document]],
+            **kwargs: Any,
     ) -> AsyncIterator[Document]:
         """Asynchronously transform an iterator of documents.
 
@@ -212,17 +213,17 @@ class RunnableGeneratorDocumentTransformer(
         else:
             async_documents = to_async_iterator(documents)
 
-        async for doc in await self._alazy_transform_documents(async_documents) :
+        async for doc in self._alazy_transform_documents(async_documents):
             yield doc
 
     def invoke(
-        self,
-        input: Union[AsyncIterator[Document], Iterator[Document]],
-        config: Optional[RunnableConfig] = None,
-        **kwargs: Any,
-    ) -> Union[AsyncIterator[Document], Iterator[Document]]:
+            self,
+            input: Union[Iterator[Document] | AsyncIterator[Document]],
+            config: Optional[RunnableConfig] = None,
+            **kwargs: Any,
+    ) -> Union[Iterator[Document] | AsyncIterator[Document]]:
         if isinstance(input, AsyncIterator):
-            raise ValueError("Use ainvoke with async iterator")
+            raise ValueError("Use ainvoke() with async iterator")
         config = config or {}
 
         if hasattr(self, "lazy_transform_documents"):
@@ -232,12 +233,11 @@ class RunnableGeneratorDocumentTransformer(
         return iter(self.transform_documents(list(input), **config))
 
     async def ainvoke(
-        self,
-        input: Union[Iterable[Document], AsyncIterator[Document]],
-        config: Optional[RunnableConfig] = None,
-        **kwargs: Optional[Any],
+            self,
+            input: Union[Iterable[Document], AsyncIterator[Document]],
+            config: Optional[RunnableConfig] = None,
+            **kwargs: Optional[Any],
     ) -> Union[AsyncIterator[Document], Iterator[Document]]:
         # # Default implementation, without generator
         config = config or {}
         return self.alazy_transform_documents(documents=input, **config)  # type:ignore
-
