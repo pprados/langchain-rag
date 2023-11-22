@@ -1,23 +1,24 @@
-import asyncio
 import itertools
 import sys
-from functools import partial
 from typing import (
     Any,
+    AsyncIterable,
     AsyncIterator,
     Iterable,
     Iterator,
     Sequence,
     Tuple,
     TypeVar,
-    Union, AsyncIterable, no_type_check, Container, List,
+    Union,
+    no_type_check,
 )
 
 from langchain.schema import BaseDocumentTransformer, Document
-from langchain.schema.runnable import RunnableGenerator, RunnableParallel
+from langchain.schema.runnable import RunnableParallel
 
-from .runnable_document_transformer import RunnableGeneratorDocumentTransformer, \
-    to_async_iterator
+from .runnable_document_transformer import (
+    RunnableGeneratorDocumentTransformer,
+)
 
 if sys.version_info.major > 3 or sys.version_info.minor > 10:
     from itertools import batched  # type: ignore[attr-defined]
@@ -30,6 +31,7 @@ else:
         it = iter(iterable)
         while batch := tuple(itertools.islice(it, n)):
             yield batch
+
 
 BATCH_SIZE = 16
 _LEGACY = True  # Use legacy langchain transformer interface
@@ -51,18 +53,18 @@ def _transform_documents_generator(
         for chunk in result["steps"].values():
             yield chunk
 
+
 async def abatched(iterable: AsyncIterable[T], n: int) -> AsyncIterable[Tuple[T, ...]]:
     if n < 1:
         raise ValueError("n must be at least one")
-    batch=[]
+    batch = []
     async for t in iterable:
         batch.append(t)
-        if len(batch)> n:
+        if len(batch) > n:
             yield tuple(batch)
             batch.clear()
     if batch:
         yield tuple(batch)
-
 
 
 class DocumentTransformers(RunnableGeneratorDocumentTransformer):
@@ -72,11 +74,14 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
         arbitrary_types_allowed = True
 
     if _LEGACY:
-        transformers: Sequence[BaseDocumentTransformer]  # type: ignore[no-redef]
+        transformers: Sequence[BaseDocumentTransformer]
     else:
-        transformers: Sequence[RunnableGeneratorDocumentTransformer]
+        transformers: Sequence[  # type: ignore[no-redef]
+            RunnableGeneratorDocumentTransformer
+        ]
     """List of document transformer that are applied in parallel."""
 
+    @no_type_check  # Bug in Mypy
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
@@ -103,11 +108,9 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
                     for doc in t.lazy_transform_documents(iter(batch)):
                         yield doc
 
-    @no_type_check
+    @no_type_check  # Bug in Mypy
     async def _alazy_transform_documents(
-        self,
-        documents: AsyncIterator[Document],
-        **kwargs: Any
+        self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         """Asynchronously transform an iterator of documents with a list
         of transformations.
@@ -132,4 +135,3 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
                 for transformer in self.transformers:
                     async for doc in transformer.alazy_transform_documents(iter(batch)):
                         yield doc
-

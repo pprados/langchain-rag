@@ -1,10 +1,10 @@
 from typing import List
 
 import pytest
+import requests
 from langchain.schema.embeddings import Embeddings
 
 from langchain_rag.vectorstores.wrapper_vectorstore import WrapperVectorStore
-import requests
 
 
 class _FakeEmbeddings(Embeddings):
@@ -57,11 +57,11 @@ def test_from_text() -> None:
     reason="API not accessible",
 )
 def test_self_query_with_wrapper_vectorstore() -> None:
-    from langchain.vectorstores.chroma import Chroma
     from langchain.retrievers.self_query.base import (
-        _get_builtin_translator,
         ChromaTranslator,
+        _get_builtin_translator,
     )
+    from langchain.vectorstores.chroma import Chroma
 
     wrapper_vs = WrapperVectorStore(vectorstore=Chroma())
     result = _get_builtin_translator(wrapper_vs)

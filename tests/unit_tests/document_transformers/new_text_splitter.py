@@ -5,22 +5,38 @@ import re
 from abc import ABC, abstractmethod
 from functools import partial
 from itertools import cycle
-from typing import AbstractSet, AsyncIterator, Iterator, Dict, cast
-from typing import Sequence, Any, TypeVar, Callable, List, Optional, Iterable, Union, \
-    Literal, Collection, Type
+from typing import (
+    AbstractSet,
+    Any,
+    AsyncIterator,
+    Callable,
+    Collection,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from langchain.pydantic_v1 import root_validator
 from langchain.schema import Document
 from langchain.text_splitter import TokenTextSplitter
 
 from langchain_rag.document_transformers import RunnableGeneratorDocumentTransformer
-from langchain_rag.document_transformers.runnable_document_transformer import \
-    to_sync_iterator, to_async_iterator
+from langchain_rag.document_transformers.runnable_document_transformer import (
+    to_sync_iterator,
+)
 
 logger = logging.getLogger(__name__)
 TS = TypeVar("TS", bound="NewTextSplitter")
 
-
+# from pydantic import model_validator
 class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
     """Interface for splitting text into chunks."""
 
@@ -39,7 +55,7 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
 
     # @model_validator(mode='before')  # pydantic v2
     # @classmethod
-    @root_validator(pre=True)
+    @root_validator(pre=True)  # pydantic v1
     def check_chunk_overlap_and_size(cls, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         chunk_overlap = kwargs["chunk_overlap"]
         chunk_size = kwargs["chunk_size"]
@@ -49,13 +65,23 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
                 f"({chunk_size}), should be smaller."
             )
         return kwargs
+    # @root_validator(pre=True)
+    # def check_chunk_overlap_and_size(cls, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    #     chunk_overlap = kwargs["chunk_overlap"]
+    #     chunk_size = kwargs["chunk_size"]
+    #     if chunk_overlap > chunk_size:
+    #         raise ValueError(
+    #             f"Got a larger chunk overlap ({chunk_overlap}) than chunk size "
+    #             f"({chunk_size}), should be smaller."
+    #         )
+    #     return kwargs
 
     @abstractmethod
     def split_text(self, text: str) -> List[str]:
         """Split text into multiple components."""
 
     def lazy_create_documents(
-            self, texts: Iterator[str], metadatas: Optional[Iterator[dict]] = None
+        self, texts: Iterator[str], metadatas: Optional[Iterator[dict]] = None
     ) -> Iterator[Document]:
         """Create documents from an iterator of texts."""
         _metadatas = metadatas or cycle([{}])
@@ -70,13 +96,16 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
                 yield new_doc
 
     def create_documents(
-            self, texts: List[str], metadatas: Optional[List[dict]] = None
+        self, texts: List[str], metadatas: Optional[List[dict]] = None
     ) -> List[Document]:
         """Create documents from a list of texts."""
-        iter_metadatas=iter(metadatas) if metadatas else None
-        return list(cast(Iterator,
-                         self.lazy_create_documents(iter(texts),
-                                                    metadatas=iter_metadatas)))
+        iter_metadatas = iter(metadatas) if metadatas else None
+        return list(
+            cast(
+                Iterator,
+                self.lazy_create_documents(iter(texts), metadatas=iter_metadatas),
+            )
+        )
 
     def lazy_split_documents(self, documents: Iterator[Document]) -> Iterator[Document]:
         """Split documents."""
@@ -111,8 +140,8 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
         for d in splits:
             _len = self.length_function(d)
             if (
-                    total + _len + (separator_len if len(current_doc) > 0 else 0)
-                    > self.chunk_size
+                total + _len + (separator_len if len(current_doc) > 0 else 0)
+                > self.chunk_size
             ):
                 if total > self.chunk_size:
                     logger.warning(
@@ -127,10 +156,9 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
                     # - we have a larger chunk than in the chunk overlap
                     # - or if we still have any chunks and the length is long
                     while total > self.chunk_overlap or (
-                            total + _len + (
-                            separator_len if len(current_doc) > 0 else 0)
-                            > self.chunk_size
-                            and total > 0
+                        total + _len + (separator_len if len(current_doc) > 0 else 0)
+                        > self.chunk_size
+                        and total > 0
                     ):
                         total -= self.length_function(current_doc[0]) + (
                             separator_len if len(current_doc) > 1 else 0
@@ -144,8 +172,9 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
         return docs
 
     @classmethod
-    def from_huggingface_tokenizer(cls, tokenizer: Any,
-                                   **kwargs: Any) -> 'NewTextSplitter':
+    def from_huggingface_tokenizer(
+        cls, tokenizer: Any, **kwargs: Any
+    ) -> "NewTextSplitter":
         """Text splitter that uses HuggingFace tokenizer to count length."""
         try:
             from transformers import PreTrainedTokenizerBase
@@ -167,12 +196,12 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
 
     @classmethod
     def from_tiktoken_encoder(
-            cls: Type[TS],
-            encoding_name: str = "gpt2",
-            model_name: Optional[str] = None,
-            allowed_special: Union[Literal["all"], AbstractSet[str]] = set(),
-            disallowed_special: Union[Literal["all"], Collection[str]] = "all",
-            **kwargs: Any,
+        cls: Type[TS],
+        encoding_name: str = "gpt2",
+        model_name: Optional[str] = None,
+        allowed_special: Union[Literal["all"], AbstractSet[str]] = set(),
+        disallowed_special: Union[Literal["all"], Collection[str]] = "all",
+        **kwargs: Any,
     ) -> TS:
         """Text splitter that uses tiktoken encoder to count length."""
         try:
@@ -210,13 +239,13 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
         return cls(length_function=_tiktoken_encoder, **kwargs)
 
     def transform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         """Transform sequence of documents by splitting them."""
         return self.split_documents(list(documents))
 
     async def atransform_documents(
-            self, documents: Sequence[Document], **kwargs: Any
+        self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
         """Asynchronously transform a sequence of documents by splitting them."""
         return await asyncio.get_running_loop().run_in_executor(
@@ -224,9 +253,7 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
         )
 
     def lazy_transform_documents(
-            self,
-            documents: Iterator[Document],
-            **kwargs: Any
+        self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
         """Transform an interator of documents.
 
@@ -239,9 +266,7 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
         return self.lazy_split_documents(documents)
 
     async def _alazy_transform_documents(  # type: ignore
-            self,
-            documents: AsyncIterator[Document],
-            **kwargs: Any
+        self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         for doc in self.lazy_split_documents(to_sync_iterator(documents)):
             yield doc
@@ -249,7 +274,7 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
 
 # %% NewCharacterTextSplitter
 def _split_text_with_regex(
-        text: str, separator: str, keep_separator: bool
+    text: str, separator: str, keep_separator: bool
 ) -> List[str]:
     # Now that we have the separator, split the text
     if separator:
@@ -282,6 +307,7 @@ class NewCharacterTextSplitter(NewTextSplitter):
         splits = _split_text_with_regex(text, separator, self.keep_separator)
         separator = "" if self.keep_separator else self.separator
         return self._merge_splits(splits, separator)
+
 
 # class NewTokenTextSplitter(NewTextSplitter):
 #     """Splitting text to tokens using model tokenizer."""

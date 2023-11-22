@@ -1,11 +1,10 @@
 import copy
-from typing import Any, AsyncIterator, Callable, Iterator, Union
+from typing import Any, AsyncIterator, Callable, Iterator
 
 import langchain
-from langchain.schema import Document
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer
+    RunnableGeneratorDocumentTransformer,
 )
 
 
@@ -26,9 +25,7 @@ class _LazyTransformer(RunnableGeneratorDocumentTransformer):
         )
 
     async def _alazy_transform_documents(  # type:ignore
-        self,
-        documents: AsyncIterator[langchain.schema.Document],
-        **kwargs: Any
+        self, documents: AsyncIterator[langchain.schema.Document], **kwargs: Any
     ) -> AsyncIterator[langchain.schema.Document]:
         async for doc in documents:
             yield langchain.schema.Document(

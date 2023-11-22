@@ -7,7 +7,6 @@ from typing import (
     Iterator,
     List,
     Optional,
-    Union,
     cast,
 )
 
@@ -20,7 +19,6 @@ from langchain.schema.language_model import BaseLanguageModel
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableGeneratorDocumentTransformer,
-    to_async_iterator,
 )
 
 
@@ -97,9 +95,7 @@ class SummarizeAndQuestionsTransformer(RunnableGeneratorDocumentTransformer):
                 yield Document(page_content=q, metadata=metadata)
 
     async def _alazy_transform_documents(  # type:ignore
-        self,
-        documents: AsyncIterator[Document],
-        **kwargs: Any
+        self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         """Compress page content of raw documents."""
         _callbacks = kwargs.get("callbacks", None)

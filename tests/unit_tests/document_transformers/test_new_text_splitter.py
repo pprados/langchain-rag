@@ -1,6 +1,6 @@
 """A clone of Test text splitting functionality."""
 import re
-from typing import cast, Iterator
+from typing import Iterator, cast
 
 import pytest
 from langchain.docstore.document import Document
@@ -82,7 +82,7 @@ def test_character_text_splitter_longer_words() -> None:
     "separator, is_separator_regex", [(re.escape("."), True), (".", False)]
 )
 def test_character_text_splitter_keep_separator_regex(
-        separator: str, is_separator_regex: bool
+    separator: str, is_separator_regex: bool
 ) -> None:
     """Test splitting by characters while keeping the separator
     that is a regex special character.
@@ -104,7 +104,7 @@ def test_character_text_splitter_keep_separator_regex(
     "separator, is_separator_regex", [(re.escape("."), True), (".", False)]
 )
 def test_character_text_splitter_discard_separator_regex(
-        separator: str, is_separator_regex: bool
+    separator: str, is_separator_regex: bool
 ) -> None:
     """Test splitting by characters discarding the separator
     that is a regex special character."""
@@ -285,7 +285,7 @@ def test_metadata_not_shallow() -> None:
 
 # def test_iterative_text_splitter_keep_separator() -> None:
 #     chunk_size = 5
-#     output = __test_iterative_text_splitter(chunk_size=chunk_size, keep_separator=True)
+#     output = __test_iterative_text_splitter(chunk_size=chunk_size, keep_separator=True) # noqa: E501
 #
 #     assert output == [
 #         "....5",
@@ -298,7 +298,7 @@ def test_metadata_not_shallow() -> None:
 #
 # def test_iterative_text_splitter_discard_separator() -> None:
 #     chunk_size = 5
-#     output = __test_iterative_text_splitter(chunk_size=chunk_size, keep_separator=False)
+#     output = __test_iterative_text_splitter(chunk_size=chunk_size, keep_separator=False) # noqa: E501
 #
 #     assert output == [
 #         "....5",
@@ -309,7 +309,7 @@ def test_metadata_not_shallow() -> None:
 #     ]
 #
 #
-# def __test_iterative_text_splitter(chunk_size: int, keep_separator: bool) -> List[str]:
+# def __test_iterative_text_splitter(chunk_size: int, keep_separator: bool) -> List[str]: # noqa: E501
 #     chunk_size += 1 if keep_separator else 0
 #
 #     splitter = RecursiveCharacterTextSplitter(
@@ -355,6 +355,7 @@ def test_metadata_not_shallow() -> None:
 #     ]
 #     assert output == expected_output
 #
+
 
 def test_split_documents() -> None:
     """Test split_documents."""

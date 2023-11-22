@@ -29,9 +29,9 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import (
     Mapped,
     Session,
+    declarative_base,
     mapped_column,
     sessionmaker,
-    declarative_base,
 )
 
 Base = declarative_base()

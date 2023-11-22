@@ -1,7 +1,7 @@
 from typing import Tuple, Type
 
-import pytest
 import langchain
+import pytest
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     to_async_iterator,

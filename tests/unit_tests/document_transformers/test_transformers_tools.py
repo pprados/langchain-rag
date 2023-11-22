@@ -1,7 +1,7 @@
 from typing import Dict
 
-import pytest
 import langchain
+import pytest
 
 from langchain_rag.document_transformers.copy_transformer import CopyDocumentTransformer
 from langchain_rag.document_transformers.generate_questions import (

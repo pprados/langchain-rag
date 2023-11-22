@@ -1,16 +1,16 @@
 import copy
 from collections.abc import AsyncIterator
-from typing import Any, Callable, Dict, Iterator, Optional, Union, cast
+from typing import Any, Callable, Dict, Iterator, Optional
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
 from langchain.prompts import PromptTemplate
-from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer,
-    to_async_iterator,
-)
 from langchain.schema import Document
 from langchain.schema.language_model import BaseLanguageModel
+
+from langchain_rag.document_transformers.runnable_document_transformer import (
+    RunnableGeneratorDocumentTransformer,
+)
 
 
 def _default_get_input(doc: Document) -> Dict[str, Any]:
@@ -69,9 +69,7 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
     #     documents=iter(documents), **kwargs))
     #
     async def _alazy_transform_documents(  # type:ignore
-        self,
-        documents: AsyncIterator[Document],
-        **kwargs: Any
+        self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         _callbacks = kwargs.get("callbacks", None)
         async for doc in documents:

@@ -3,10 +3,19 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from typing import Any, Iterable, Iterator, Optional, Sequence, TypeVar, Union, cast
-
+from typing import (
+    Any,
+    Iterable,
+    Iterator,
+    Optional,
+    Sequence,
+    TypeVar,
+    Union,
+    no_type_check,
+)
 from langchain.schema import BaseDocumentTransformer, Document
-from langchain.schema.runnable import RunnableConfig, RunnableSerializable
+from langchain.schema.runnable import RunnableConfig, Runnable
+from langchain.pydantic_v1 import BaseModel
 
 """
     We propose an alternative way of making transformers compatible with LCEL.
@@ -50,15 +59,15 @@ _DONE = ""
 _TIMEOUT = 1
 
 
-def to_sync_iterator(async_iterable: AsyncIterator[T],
-                     maxsize: int = 0) -> Iterator[T]:
-    def _run_coroutine(loop: asyncio.AbstractEventLoop,
-                       async_iterable: AsyncIterator[T],
-                       queue: asyncio.Queue) -> None:
-
+def to_sync_iterator(async_iterable: AsyncIterator[T], maxsize: int = 0) -> Iterator[T]:
+    def _run_coroutine(
+            loop: asyncio.AbstractEventLoop,
+            async_iterable: AsyncIterator[T],
+            queue: asyncio.Queue,
+    ) -> None:
         async def _consume_async_iterable(
-                async_iterable: AsyncIterator[T],
-                queue: asyncio.Queue) -> None:
+                async_iterable: AsyncIterator[T], queue: asyncio.Queue
+        ) -> None:
             async for x in async_iterable:
                 await queue.put(x)
 
@@ -87,57 +96,13 @@ def to_sync_iterator(async_iterable: AsyncIterator[T],
     t.join()
 
 
-# def to_sync_iterator(iterator: AsyncIterator[T]) -> Iterator[T]:
-#     import queue
-#     queue=queue.Queue()
-#     async def _wrapper():
-#         print("la")
-#         async for item in iterator:
-#             print("ici")
-#             queue.put_nowait(item)
-#     with ThreadPoolExecutor(1) as executor:
-#         loop = asyncio.new_event_loop()
-#         loop.set_debug(False)
-#         task = loop.run_in_executor(executor, _wrapper)
-#         done = asyncio.wait([task])
-#         x=queue.get()
-#         x=queue.get()
-#         x=queue.get()
-# async def _wrapper():
-#     async for item in iterator:
-#         yield item
-#
-# with ThreadPoolExecutor(1) as executor:
-#     loop = asyncio.get_event_loop()
-#     task = loop.run_in_executor(executor, _wrapper)
-#     test = asyncio.wait([task])
-#     x=asyncio.wait([test])
-#     x=asyncio.wait([test])
-#     x=asyncio.wait([test])
-#     for doc in test:
-#         print(doc)
-# print(test)
-# x=loop.run_until_complete(_wrapper())
-# x=asyncio.run(_wrapper())
-
-# for item in asyncio.run(_wrapper()):
-#     yield item
-
-# loop = asyncio.get_event_loop()
-# try:
-#     loop.run_until_complete(_wrapper())
-# finally:
-#     # loop.run_until_complete(loop.shutdown_asyncgens()) # see: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.shutdown_asyncgens
-#     # loop.close()
-#     pass
-# return results
-
 class RunnableGeneratorDocumentTransformer(
-    RunnableSerializable[
+    Runnable[
         Union[AsyncIterator[Document], Iterator[Document]],  # input
         Union[AsyncIterator[Document], Iterator[Document]],  # output
     ],
     BaseDocumentTransformer,
+    BaseModel,  # Pydantic v2
     ABC,
 ):
     """
@@ -159,18 +124,9 @@ class RunnableGeneratorDocumentTransformer(
     async def atransform_documents(
             self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
-        # Convert lazy to classical transformation
-        # result=[]
-        # async for doc in self.alazy_transform_documents(
-        #         iter(documents), **kwargs
-        # ):
-        #     result.append(doc)
-        # return result
         return [
             doc
-            async for doc in self.alazy_transform_documents(
-                iter(documents), **kwargs
-            )
+            async for doc in self.alazy_transform_documents(iter(documents), **kwargs)
         ]
 
     @abstractmethod
@@ -189,12 +145,11 @@ class RunnableGeneratorDocumentTransformer(
 
     @abstractmethod
     async def _alazy_transform_documents(  # type: ignore
-            self,
-            documents: AsyncIterator[Document],
-            **kwargs: Any
+            self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         raise NotImplementedError()
 
+    @no_type_check  # Bug in Mypy
     async def alazy_transform_documents(
             self,
             documents: Union[AsyncIterator[Document], Iterator[Document]],
