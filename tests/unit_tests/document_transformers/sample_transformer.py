@@ -1,10 +1,11 @@
 import copy
-from typing import Any, AsyncIterator, Callable, Iterator, Sequence, Union
+from typing import Any, AsyncIterator, Callable, Iterator, Union
 
 import langchain
+from langchain.schema import Document
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer, RunnableDocumentTransformer,
+    RunnableGeneratorDocumentTransformer
 )
 
 
@@ -39,26 +40,9 @@ class _LazyTransformer(RunnableGeneratorDocumentTransformer):
             )
 
 
-class _Transformer(RunnableDocumentTransformer):
-    """Implementation of a runnable transformer, without lazy transformation"""
-
-    fn: Callable[[Any], str]
-
-    def transform_documents(
-        self, documents: Sequence[langchain.schema.Document], **kwargs: Any
-    ) -> Sequence[langchain.schema.Document]:
-        return [
-            langchain.schema.Document(
-                page_content=self.fn(doc.page_content),
-                metadata=copy.deepcopy(doc.metadata),
-            )
-            for doc in documents
-        ]
-
-    async def atransform_documents(
-        self, documents: Sequence[langchain.schema.Document], **kwargs: Any
-    ) -> Sequence[langchain.schema.Document]:
-        return self.transform_documents(documents=documents, **kwargs)
+class LowerLazyTransformer(_LazyTransformer):
+    def __init__(self, **kwargs: Any):
+        super().__init__(fn=str.lower, **kwargs)
 
 
 class UpperLazyTransformer(_LazyTransformer):
@@ -66,16 +50,4 @@ class UpperLazyTransformer(_LazyTransformer):
         super().__init__(fn=str.upper, **kwargs)
 
 
-class UpperTransformer(_Transformer):
-    def __init__(self, **kwargs: Any):
-        super().__init__(fn=str.upper, **kwargs)
-
-
-class LowerLazyTransformer(_LazyTransformer):
-    def __init__(self, **kwargs: Any):
-        super().__init__(fn=str.lower, **kwargs)
-
-
-class LowerTransformer(_Transformer):
-    def __init__(self, **kwargs: Any):
-        super().__init__(fn=str.lower, **kwargs)
+# %%

@@ -1,6 +1,10 @@
+import asyncio
 import copy
+import threading
+import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Iterable, Iterator, Optional, Sequence, TypeVar, Union
 
 from langchain.schema import BaseDocumentTransformer, Document
@@ -43,6 +47,88 @@ async def to_async_iterator(iterator: Iterable[T]) -> AsyncIterator[T]:
     for item in iterator:
         yield item
 
+_DONE=""
+_TIMEOUT=1
+def to_sync_iterator(async_iterable: AsyncIterator[T], maxsize = 0) -> Iterator[T]:
+    def _run_coroutine(loop, async_iterable, queue):
+
+        async def _consume_async_iterable(async_iterable, queue):
+            async for x in async_iterable:
+                await queue.put(x)
+
+            await queue.put(_DONE)
+
+        loop.run_until_complete(_consume_async_iterable(async_iterable, queue))
+
+    def sync_iterable():
+        queue = asyncio.Queue(maxsize=maxsize)
+        loop = asyncio.new_event_loop()
+
+        t = threading.Thread(target=_run_coroutine, args=(loop, async_iterable, queue))
+        t.daemon = True
+        t.start()
+
+        while True:
+            if not queue.empty():
+                x = queue.get_nowait()
+
+                if x is _DONE:
+                    break
+                else:
+                    yield x
+            else:
+                time.sleep(_TIMEOUT)
+
+        t.join()
+
+    return sync_iterable()
+
+
+
+# def to_sync_iterator(iterator: AsyncIterator[T]) -> Iterator[T]:
+#     import queue
+#     queue=queue.Queue()
+#     async def _wrapper():
+#         print("la")
+#         async for item in iterator:
+#             print("ici")
+#             queue.put_nowait(item)
+#     with ThreadPoolExecutor(1) as executor:
+#         loop = asyncio.new_event_loop()
+#         loop.set_debug(False)
+#         task = loop.run_in_executor(executor, _wrapper)
+#         done = asyncio.wait([task])
+#         x=queue.get()
+#         x=queue.get()
+#         x=queue.get()
+    # async def _wrapper():
+    #     async for item in iterator:
+    #         yield item
+    #
+    # with ThreadPoolExecutor(1) as executor:
+    #     loop = asyncio.get_event_loop()
+    #     task = loop.run_in_executor(executor, _wrapper)
+    #     test = asyncio.wait([task])
+    #     x=asyncio.wait([test])
+    #     x=asyncio.wait([test])
+    #     x=asyncio.wait([test])
+    #     for doc in test:
+    #         print(doc)
+        # print(test)
+        # x=loop.run_until_complete(_wrapper())
+        # x=asyncio.run(_wrapper())
+
+        # for item in asyncio.run(_wrapper()):
+        #     yield item
+
+        # loop = asyncio.get_event_loop()
+    # try:
+    #     loop.run_until_complete(_wrapper())
+    # finally:
+    #     # loop.run_until_complete(loop.shutdown_asyncgens()) # see: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.shutdown_asyncgens
+    #     # loop.close()
+    #     pass
+    # return results
 
 class RunnableGeneratorDocumentTransformer(
     RunnableSerializable[
@@ -77,11 +163,12 @@ class RunnableGeneratorDocumentTransformer(
         #         iter(documents), **kwargs
         # ):
         #     result.append(doc)
+        # return result
         return [
             doc
             async for doc in self.alazy_transform_documents(
                 iter(documents), **kwargs
-            )  # type:ignore
+            )
         ]
 
     @abstractmethod
@@ -125,7 +212,7 @@ class RunnableGeneratorDocumentTransformer(
         else:
             async_documents = to_async_iterator(documents)
 
-        async for doc in self._alazy_transform_documents(async_documents):
+        async for doc in await self._alazy_transform_documents(async_documents) :
             yield doc
 
     def invoke(
@@ -154,40 +241,3 @@ class RunnableGeneratorDocumentTransformer(
         config = config or {}
         return self.alazy_transform_documents(documents=input, **config)  # type:ignore
 
-
-class RunnableDocumentTransformer(
-    RunnableSerializable[Sequence[Document], Sequence[Document]],
-    BaseDocumentTransformer,
-    ABC,
-):
-    """
-    Runnable Document Transformer with lazy transformation.
-    This class is a transition class for proposing lazy transformers,
-    compatible with LCEL.
-    Later, it can be integrated into BaseDocumentTransformer
-    if you refuse to add a lazy approach to transformations.
-    All subclass of BaseDocumentTransformer must be updated to be compatible with this.
-    """
-
-    """  # FIXME
-    Now, it's possible to create a chain of transformations
-    (only if the transformation is compatible with `RunnableDocumentTransformer`)
-    """
-
-    def invoke(
-        self, input: Sequence[Document], config: Optional[RunnableConfig] = None
-    ) -> Sequence[Document]:
-        config = config or {}
-        return self.transform_documents(
-            input,
-            **config,
-        )
-
-    async def ainvoke(
-        self,
-        input: Sequence[Document],
-        config: Optional[RunnableConfig] = None,
-        **kwargs: Optional[Any],
-    ) -> Sequence[Document]:
-        config = config or {}
-        return await self.atransform_documents(input, **config)

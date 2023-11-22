@@ -8,16 +8,14 @@ from langchain_rag.document_transformers.document_transformers import (
 )
 from tests.unit_tests.document_transformers.sample_transformer import (
     LowerLazyTransformer,
-    LowerTransformer,
 )
 from tests.unit_tests.document_transformers.test_runnable_transformers import (
     UpperLazyTransformer,
-    UpperTransformer,
 )
 
 
 @pytest.mark.skipif(_COMPATIBLE_RUNNABLE, reason="Test only runnable transformer")
-@pytest.mark.parametrize("cls", [UpperLazyTransformer, UpperTransformer])
+@pytest.mark.parametrize("cls", [UpperLazyTransformer])
 def test_document_transformers(cls: Type) -> None:
     doc1 = langchain.schema.Document(page_content="my test")
     doc2 = langchain.schema.Document(page_content="other test")
@@ -76,7 +74,6 @@ def test_document_transformers_runnable(cls: Tuple[Type, Type]) -> None:
     "cls",
     [
         (UpperLazyTransformer, LowerLazyTransformer),
-        # (UpperTransformer, LowerTransformer),
     ],
 )
 @pytest.mark.asyncio

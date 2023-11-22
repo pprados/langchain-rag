@@ -8,13 +8,11 @@ from langchain_rag.document_transformers.runnable_document_transformer import (
 )
 from tests.unit_tests.document_transformers.sample_transformer import (
     LowerLazyTransformer,
-    LowerTransformer,
     UpperLazyTransformer,
-    UpperTransformer,
 )
 
 
-@pytest.mark.parametrize("cls", [UpperLazyTransformer, UpperTransformer])
+@pytest.mark.parametrize("cls", [UpperLazyTransformer])
 def test_transform(cls: Type) -> None:
     doc1 = langchain.schema.Document(page_content="my test")
     doc2 = langchain.schema.Document(page_content="other test")
@@ -25,7 +23,7 @@ def test_transform(cls: Type) -> None:
     ]
 
 
-@pytest.mark.parametrize("cls", [UpperLazyTransformer, UpperTransformer])
+@pytest.mark.parametrize("cls", [UpperLazyTransformer])
 @pytest.mark.asyncio
 async def test_atransform(cls: Type) -> None:
     doc1 = langchain.schema.Document(page_content="my test")
@@ -80,7 +78,7 @@ async def test_alazy_transform_async_iterator(cls: Type) -> None:
     ]
 
 
-@pytest.mark.parametrize("cls", [UpperLazyTransformer, UpperTransformer])
+@pytest.mark.parametrize("cls", [UpperLazyTransformer])
 def test_invoke_transformer(cls: Type) -> None:
     doc1 = langchain.schema.Document(page_content="my test")
     doc2 = langchain.schema.Document(page_content="other test")
@@ -97,18 +95,6 @@ async def test_ainvoke_transformer_sync_iterator(cls: Type) -> None:
     doc1 = langchain.schema.Document(page_content="my test")
     doc2 = langchain.schema.Document(page_content="other test")
     r = [doc async for doc in await cls().ainvoke(iter([doc1, doc2]))]
-    assert r == [
-        langchain.schema.Document(page_content=doc1.page_content.upper()),
-        langchain.schema.Document(page_content=doc2.page_content.upper()),
-    ]
-
-
-@pytest.mark.parametrize("cls", [UpperTransformer])
-@pytest.mark.asyncio
-async def test_ainvoke_transformer(cls: Type) -> None:
-    doc1 = langchain.schema.Document(page_content="my test")
-    doc2 = langchain.schema.Document(page_content="other test")
-    r = await cls().ainvoke([doc1, doc2])
     assert r == [
         langchain.schema.Document(page_content=doc1.page_content.upper()),
         langchain.schema.Document(page_content=doc2.page_content.upper()),
@@ -134,7 +120,6 @@ async def test_ainvoke_transformer_async_iterator(cls: Type) -> None:
     "cls",
     [
         (UpperLazyTransformer, LowerLazyTransformer),
-        (UpperTransformer, LowerTransformer),
     ],
 )
 def test_invoke_pipeline(cls: Tuple[Type, Type]) -> None:
@@ -171,19 +156,6 @@ async def test_ainvoke_pipeline_async_iterator(cls: Tuple[Type, Type]) -> None:
     r = await runnable.ainvoke(iter([doc1, doc2]))
     rr = [doc async for doc in r]
     assert rr == [
-        langchain.schema.Document(page_content=doc1.page_content.lower()),
-        langchain.schema.Document(page_content=doc2.page_content.lower()),
-    ]
-
-
-@pytest.mark.parametrize("cls", [(UpperTransformer, LowerTransformer)])
-@pytest.mark.asyncio
-async def test_ainvoke_pipeline(cls: Tuple[Type, Type]) -> None:
-    doc1 = langchain.schema.Document(page_content="My test")
-    doc2 = langchain.schema.Document(page_content="Other test")
-    runnable = cls[0]() | cls[1]()
-    r = await runnable.ainvoke(iter([doc1, doc2]))
-    assert r == [
         langchain.schema.Document(page_content=doc1.page_content.lower()),
         langchain.schema.Document(page_content=doc2.page_content.lower()),
     ]
