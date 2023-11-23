@@ -1,3 +1,6 @@
+"""
+Some very simple transformer (lower, upper), lazy and compatible with LCEL.
+"""
 import copy
 from typing import Any, AsyncIterator, Callable, Iterator
 

@@ -1,4 +1,8 @@
-"""A clone of Test text splitting functionality."""
+"""
+A clone of Test text splitting functionality.
+This is to demonstrate that it is possible to convert legacy implementations
+while maintaining compatibility with current TUs.
+"""
 import re
 from typing import Iterator, cast
 
@@ -281,6 +285,39 @@ def test_metadata_not_shallow() -> None:
     docs[0].metadata["foo"] = 1
     assert docs[0].metadata == {"source": "1", "foo": 1}
     assert docs[1].metadata == {"source": "1"}
+
+
+def test_lcel_transform_documents() -> None:
+    """Test create documents method."""
+    texts = ["foo bar", "baz"]
+    runnable = CharacterTextSplitter(
+        separator=" ", chunk_size=3, chunk_overlap=0
+    ) | CharacterTextSplitter(separator=" ", chunk_size=1, chunk_overlap=0)
+    input_docs = [Document(page_content=text) for text in texts]
+    docs = list(runnable.invoke(input_docs))
+    expected_docs = [
+        Document(page_content="foo"),
+        Document(page_content="bar"),
+        Document(page_content="baz"),
+    ]
+    assert docs == expected_docs
+
+
+@pytest.mark.asyncio
+async def test_alcel_transform_documents() -> None:
+    """Test create documents method."""
+    texts = ["foo bar", "baz"]
+    runnable = CharacterTextSplitter(
+        separator=" ", chunk_size=3, chunk_overlap=0
+    ) | CharacterTextSplitter(separator=" ", chunk_size=1, chunk_overlap=0)
+    input_docs = [Document(page_content=text) for text in texts]
+    docs = [doc async for doc in await runnable.ainvoke(input_docs)]
+    expected_docs = [
+        Document(page_content="foo"),
+        Document(page_content="bar"),
+        Document(page_content="baz"),
+    ]
+    assert docs == expected_docs
 
 
 # def test_iterative_text_splitter_keep_separator() -> None:

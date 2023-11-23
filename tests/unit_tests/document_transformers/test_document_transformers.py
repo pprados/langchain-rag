@@ -2,18 +2,13 @@ from typing import Sequence
 
 import pytest
 from langchain.schema import Document
-from langchain.text_splitter import TokenTextSplitter
+from langchain.text_splitter import CharacterTextSplitter
 
 from langchain_rag.document_transformers.document_transformers import (
     _LEGACY,
     DocumentTransformers,
 )
-from tests.unit_tests.document_transformers.sample_transformer import (
-    LowerLazyTransformer,
-)
-from tests.unit_tests.document_transformers.test_runnable_transformers import (
-    UpperLazyTransformer,
-)
+from .sample_transformer import LowerLazyTransformer, UpperLazyTransformer
 
 
 def by_pg(doc: Document) -> str:
@@ -23,7 +18,7 @@ def by_pg(doc: Document) -> str:
 @pytest.mark.skipif(not _LEGACY, reason="Test only runnable transformer")
 @pytest.mark.parametrize(
     "transformers",
-    [[TokenTextSplitter(chunk_size=1, chunk_overlap=0), UpperLazyTransformer()]],
+    [[CharacterTextSplitter(separator=" ",chunk_size=1, chunk_overlap=0), UpperLazyTransformer()]],
 )
 def test_document_transformers_legacy(transformers: Sequence) -> None:
     doc1 = Document(page_content="my test")
@@ -35,10 +30,10 @@ def test_document_transformers_legacy(transformers: Sequence) -> None:
     assert sorted(r, key=by_pg) == sorted(
         [
             Document(page_content="my"),
-            Document(page_content=" test"),
+            Document(page_content="test"),
             Document(page_content=doc1.page_content.upper()),
             Document(page_content="other"),
-            Document(page_content=" test"),
+            Document(page_content="test"),
             Document(page_content=doc2.page_content.upper()),
         ],
         key=by_pg,

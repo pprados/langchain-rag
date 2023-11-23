@@ -10,7 +10,7 @@ packages = [{ include = "langchain_rag" }]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
-langchain = ">=0.0.339"
+langchain = ">=0.0.339rc"
 jupyter = "^1.0.0"
 
 

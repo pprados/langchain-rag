@@ -1,4 +1,5 @@
 from typing import List
+from unittest import mock
 
 import pytest
 import requests
@@ -51,18 +52,16 @@ def test_from_text() -> None:
     assert isinstance(wrapper_vs.vectorstore, FAISS)
 
 
-@pytest.mark.requires("chromadb")
-@pytest.mark.skipif(
-    not _is_api_accessible("http://localhost:8000/api/v1/heartbeat"),
-    reason="API not accessible",
-)
 def test_self_query_with_wrapper_vectorstore() -> None:
-    from langchain.retrievers.self_query.base import (
-        ChromaTranslator,
-        _get_builtin_translator,
-    )
-    from langchain.vectorstores.chroma import Chroma
+    with mock.patch("langchain.vectorstores.chroma.Chroma.__init__") as patch:
+        from langchain.retrievers.self_query.base import (
+            ChromaTranslator,
+            _get_builtin_translator,
+        )
+        from langchain.vectorstores.chroma import Chroma
 
-    wrapper_vs = WrapperVectorStore(vectorstore=Chroma())
-    result = _get_builtin_translator(wrapper_vs)
-    assert isinstance(result, ChromaTranslator)
+        patch.return_value = None
+
+        wrapper_vs = WrapperVectorStore(vectorstore=Chroma())
+        result = _get_builtin_translator(wrapper_vs)
+        assert isinstance(result, ChromaTranslator)

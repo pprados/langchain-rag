@@ -1,3 +1,7 @@
+"""
+It's a sample of refactoring the legacy TextSplitter, to be compatible with lazy, async
+and LCEL.
+"""
 import asyncio
 import copy
 import logging
@@ -28,8 +32,8 @@ from langchain.pydantic_v1 import root_validator
 from langchain.schema import Document
 from langchain.text_splitter import TokenTextSplitter
 
-from langchain_rag.document_transformers import RunnableGeneratorDocumentTransformer
 from langchain_rag.document_transformers.runnable_document_transformer import (
+    RunnableGeneratorDocumentTransformer,
     to_sync_iterator,
 )
 
@@ -37,7 +41,6 @@ logger = logging.getLogger(__name__)
 TS = TypeVar("TS", bound="NewTextSplitter")
 
 
-# from pydantic import model_validator
 class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
     """Interface for splitting text into chunks."""
 
