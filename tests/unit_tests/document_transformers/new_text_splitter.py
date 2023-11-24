@@ -260,7 +260,7 @@ class NewTextSplitter(RunnableGeneratorDocumentTransformer, ABC):
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
-        """Transform an interator of documents.
+        """Transform an iterator of documents.
 
         Args:
             documents: A sequence of Documents to be transformed.

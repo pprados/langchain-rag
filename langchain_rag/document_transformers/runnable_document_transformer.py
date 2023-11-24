@@ -2,8 +2,9 @@ import asyncio
 import threading
 import time
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+
 from typing import (
+    TYPE_CHECKING,
     Any,
     Iterable,
     Iterator,
@@ -11,12 +12,21 @@ from typing import (
     Sequence,
     TypeVar,
     Union,
-    no_type_check,
+    no_type_check, AsyncIterator,
 )
 
-from langchain.pydantic_v1 import BaseModel
 from langchain.schema import BaseDocumentTransformer, Document
-from langchain.schema.runnable import Runnable, RunnableConfig
+from langchain_core.pydantic_v1 import BaseModel
+from langchain_core.runnables import (
+    Runnable,
+    RunnableConfig,
+)
+from langchain_core.runnables.base import coerce_to_runnable
+
+if TYPE_CHECKING:
+    from .document_transformers import DocumentTransformers
+
+_LEGACY = False  # Use legacy langchain transformer interface
 
 """
     We propose an alternative way of making transformers compatible with LCEL.
@@ -50,7 +60,7 @@ from langchain.schema.runnable import Runnable, RunnableConfig
 T = TypeVar("T")
 
 
-async def to_async_iterator(iterator: Iterable[T]) -> AsyncIterator[T]:
+async def to_async_iterator(iterator: Iterator[T]) -> AsyncIterator[T]:
     """Convert an iterable to an async iterator."""
     for item in iterator:
         yield item
@@ -97,10 +107,14 @@ def to_sync_iterator(async_iterable: AsyncIterator[T], maxsize: int = 0) -> Iter
     t.join()
 
 
+Input = Union[AsyncIterator[Document], Iterator[Document]]
+Output = Union[AsyncIterator[Document], Iterator[Document]]
+
+
 class RunnableGeneratorDocumentTransformer(
     Runnable[
-        Union[AsyncIterator[Document], Iterator[Document]],  # input
-        Union[AsyncIterator[Document], Iterator[Document]],  # output
+        Input,
+        Output,
     ],
     BaseDocumentTransformer,
     BaseModel,  # Pydantic v2
@@ -109,12 +123,64 @@ class RunnableGeneratorDocumentTransformer(
     """
     Runnable Document Transformer with lazy transformation.
 
-    This class is a transition class for proposing lazy transformers,
-    compatible with LCEL.
-    Later, it can be integrated into BaseDocumentTransformer
-    if you agree to add a lazy approach to transformations.
-    All subclass of BaseDocumentTransformer must be updated to be compatible with this.
+    You can compose a list of transformations with the *or* operator.
+
+        .. code-block:: python
+
+            runnable=TokenTextSplitter(...) | CharacterTextSplitter(...)
+            docs = list(runnable.invoke(input_docs))
+
+    To apply multiple transformations with the same input, use the *plus* operator.
+
+        .. code-block:: python
+
+            runnable=TokenTextSplitter(...) + CharacterTextSplitter(...)
+            docs = list(runnable.invoke(input_docs))
+
+    and, you can combine these two operator
+
+
+        .. code-block:: python
+
+            runnable=(
+                (TokenTextSplitter(...) | CharacterTextSplitter(...) ) +
+                CharacterTextSplitter(...))
+            docs = list(runnable.invoke(input_docs))
+
+    > This class is a transition class for proposing lazy transformers,
+    > compatible with LCEL.
+    > Later, it can be integrated into BaseDocumentTransformer
+    >if you agree to add a lazy approach to transformations.
+    >All subclass of BaseDocumentTransformer must be updated to be compatible with this.
     """
+
+    def __add__(
+        self,
+        other: "RunnableGeneratorDocumentTransformer",
+    ) -> "DocumentTransformers":
+        """Compose this runnable with another object to create a RunnableSequence."""
+        # return RunnableSequence(first=self, last=coerce_to_runnable(other))
+        from .document_transformers import DocumentTransformers
+
+        if isinstance(other, DocumentTransformers):
+            return DocumentTransformers(
+                transformers=list(other.transformers) + [self],
+            )
+        else:
+            if _LEGACY:
+                return DocumentTransformers(transformers=[self, other])
+            else:
+                return DocumentTransformers(
+                    transformers=[self, coerce_to_runnable(other)]
+                )
+
+    if _LEGACY:
+
+        def __radd__(
+            self,
+            other: "RunnableGeneratorDocumentTransformer",
+        ) -> DocumentTransformers:
+            return self.__add__(other)
 
     def transform_documents(
         self, documents: Sequence[Document], **kwargs: Any
@@ -134,7 +200,7 @@ class RunnableGeneratorDocumentTransformer(
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
-        """Transform an interator of documents.
+        """Transform an iterator of documents.
 
         Args:
             documents: A sequence of Documents to be transformed.
@@ -162,7 +228,7 @@ class RunnableGeneratorDocumentTransformer(
             documents: An iterator of Documents to be transformed.
 
         Returns:
-            An interator of transformed Documents.
+            An iterator of transformed Documents.
         """
         if isinstance(documents, AsyncIterator):
             async_documents = documents
@@ -174,10 +240,10 @@ class RunnableGeneratorDocumentTransformer(
 
     def invoke(
         self,
-        input: Union[Iterator[Document] | AsyncIterator[Document]],
+        input: Union[Iterator[Document], AsyncIterator[Document]],
         config: Optional[RunnableConfig] = None,
         **kwargs: Any,
-    ) -> Union[Iterator[Document] | AsyncIterator[Document]]:
+    ) -> Union[Iterator[Document], AsyncIterator[Document]]:
         if isinstance(input, AsyncIterator):
             raise ValueError("Use ainvoke() with async iterator")
         config = config or {}

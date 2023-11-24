@@ -4,7 +4,7 @@ Some very simple transformer (lower, upper), lazy and compatible with LCEL.
 import copy
 from typing import Any, AsyncIterator, Callable, Iterator
 
-import langchain
+from langchain.schema import Document
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableGeneratorDocumentTransformer,
@@ -17,10 +17,10 @@ class _LazyTransformer(RunnableGeneratorDocumentTransformer):
     fn: Callable[[Any], str]
 
     def lazy_transform_documents(
-        self, documents: Iterator[langchain.schema.Document], **kwargs: Any
-    ) -> Iterator[langchain.schema.Document]:
+        self, documents: Iterator[Document], **kwargs: Any
+    ) -> Iterator[Document]:
         return (
-            langchain.schema.Document(
+            Document(
                 page_content=self.fn(doc.page_content),
                 metadata=copy.deepcopy(doc.metadata),
             )
@@ -28,10 +28,10 @@ class _LazyTransformer(RunnableGeneratorDocumentTransformer):
         )
 
     async def _alazy_transform_documents(  # type:ignore
-        self, documents: AsyncIterator[langchain.schema.Document], **kwargs: Any
-    ) -> AsyncIterator[langchain.schema.Document]:
+        self, documents: AsyncIterator[Document], **kwargs: Any
+    ) -> AsyncIterator[Document]:
         async for doc in documents:
-            yield langchain.schema.Document(
+            yield Document(
                 page_content=self.fn(doc.page_content),
                 metadata=copy.deepcopy(doc.metadata),
             )
@@ -45,6 +45,3 @@ class LowerLazyTransformer(_LazyTransformer):
 class UpperLazyTransformer(_LazyTransformer):
     def __init__(self, **kwargs: Any):
         super().__init__(fn=str.upper, **kwargs)
-
-
-# %%

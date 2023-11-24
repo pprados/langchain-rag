@@ -10,7 +10,8 @@ packages = [{ include = "langchain_rag" }]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
-langchain = ">=0.0.339rc"
+langchain = ">=0.0.339"
+langchain-core = ">=0.0.4"
 jupyter = "^1.0.0"
 
 
@@ -96,3 +97,25 @@ exclude = [
 ignore_missing_imports = "True"
 disallow_untyped_defs = "True"
 exclude = []
+
+[tool.pytest.ini_options]
+# --strict-markers will raise errors on unknown marks.
+# https://docs.pytest.org/en/7.1.x/how-to/mark.html#raising-errors-on-unknown-marks
+#
+# https://docs.pytest.org/en/7.1.x/reference/reference.html
+# --strict-config       any warnings encountered while parsing the `pytest`
+#                       section of the configuration file raise errors.
+#
+# https://github.com/tophat/syrupy
+# --snapshot-warn-unused    Prints a warning on unused snapshots rather than fail the test suite.
+addopts = "--strict-markers --strict-config --durations=5 --snapshot-warn-unused -vv"
+# Registering custom markers.
+# https://docs.pytest.org/en/7.1.x/example/markers.html#registering-markers
+markers = [
+  "requires: mark tests as requiring a specific library",
+  "scheduled: mark tests to run in scheduled testing",
+  "compile: mark placeholder test used to compile integration tests without running them"
+]
+asyncio_mode = "auto"
+
+

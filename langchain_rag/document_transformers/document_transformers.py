@@ -15,12 +15,14 @@ from typing import (
 
 from langchain.schema import BaseDocumentTransformer, Document
 from langchain.schema.runnable import RunnableParallel
+from langchain_core.runnables.base import coerce_to_runnable
 
 from .runnable_document_transformer import (
+    _LEGACY,
     RunnableGeneratorDocumentTransformer,
 )
 
-if sys.version_info.major > 3 or sys.version_info.minor > 10:
+if sys.version_info.major > 3 or sys.version_info.minor >= 12:
     from itertools import batched  # type: ignore[attr-defined]
 else:
     T = TypeVar("T")  # Only in python 3.12
@@ -34,7 +36,6 @@ else:
 
 
 BATCH_SIZE = 16
-_LEGACY = True  # Use legacy langchain transformer interface
 
 
 def _transform_documents_generator(
@@ -49,7 +50,7 @@ def _transform_documents_generator(
     }
     # Implementation when all transformers are compatible with Runnable
     for batch in batched(documents, BATCH_SIZE):
-        result = RunnableParallel[Input](steps=steps).invoke(batch)
+        result = RunnableParallel[Input](steps=steps).invoke(iter(batch))
         for chunk in result["steps"].values():
             yield chunk
 
@@ -84,11 +85,30 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
         ]
     """List of document transformer that are applied in parallel."""
 
+    def __add__(
+        self,
+        other: "DocumentTransformers",
+    ) -> "DocumentTransformers":
+        """Compose this runnable with another object to create a RunnableSequence."""
+        if isinstance(other, DocumentTransformers):
+            return DocumentTransformers(
+                transformers=list(other.transformers) + list(self.transformers),
+            )
+        else:
+            if _LEGACY:
+                return DocumentTransformers(
+                    transformers=list(self.transformers) + [other]
+                )
+            else:
+                return DocumentTransformers(
+                    transformers=list(self.transformers) + [coerce_to_runnable(other)]
+                )
+
     @no_type_check  # Bug in Mypy
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
-        """Transform an interator of documents with the list of transformations.
+        """Transform an iterator of documents with the list of transformations.
 
         Args:
             documents: A sequence of Documents to be transformed.
@@ -96,6 +116,7 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
         Returns:
             An iterator oftransformed Documents.
         """
+        # Can be refactored to use parallelism
         if _LEGACY:
             # Implementation when all transformers are NOT compatible with Runnable
             # It's not compatible with lazy strategy. Load all documents and apply
@@ -106,6 +127,7 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
                         yield doc
 
         else:
+            # Implementation with only the LCEL compatible transformers
             for batch in batched(documents, BATCH_SIZE):
                 for t in self.transformers:
                     for doc in t.lazy_transform_documents(iter(batch)):
@@ -122,7 +144,7 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
             documents: An iterator of Documents to be transformed.
 
         Returns:
-            An interator of transformed Documents.
+            An iterator of transformed Documents.
         """
         if _LEGACY:
             # Implementation when all transformers are NOT compatible with Runnable

@@ -1,5 +1,5 @@
-from collections.abc import AsyncIterator
-from typing import Any, Callable, Dict, Iterator, Optional, Sequence, cast
+from typing import Any, Callable, Dict, Iterator, Optional, Sequence, cast, \
+    AsyncIterator
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
