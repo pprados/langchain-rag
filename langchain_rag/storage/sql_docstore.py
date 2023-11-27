@@ -12,6 +12,8 @@ from typing import (
     Union,
 )
 
+# Note: Import directly from langchain_core is not stable and generate some errors
+#from langchain_core.stores import BaseStore
 from langchain.schema import BaseStore
 from sqlalchemy import (
     Column,

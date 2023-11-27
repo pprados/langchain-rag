@@ -10,12 +10,22 @@ from typing import (
     cast,
 )
 
-from langchain.chains import LLMChain
-from langchain.output_parsers import PydanticOutputParser
-from langchain.prompts import PromptTemplate
-from langchain.pydantic_v1 import BaseModel
+# Note: Import directly from langchain_core is not stable and generate some errors
+# from langchain_core.documents import Document
+# from langchain_core.language_models import BaseLanguageModel
+# from langchain_core.output_parsers import BaseOutputParser
+# from langchain_core.prompts import PromptTemplate
+# from langchain_core.pydantic_v1 import BaseModel
+# from langchain.chains import LLMChain
+# from langchain.output_parsers import PydanticOutputParser
+
 from langchain.schema import BaseOutputParser, Document
 from langchain.schema.language_model import BaseLanguageModel
+from langchain.prompts import PromptTemplate
+from langchain.pydantic_v1 import BaseModel
+
+from langchain.chains import LLMChain
+from langchain.output_parsers import PydanticOutputParser
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableGeneratorDocumentTransformer,

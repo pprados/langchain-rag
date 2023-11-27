@@ -6,14 +6,18 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type,
+    Type, TypeVar,
 )
 from unittest.mock import call
 
 import pytest
+# from langchain_core.documents import Document
+# from langchain_core.embeddings import Embeddings
+# from langchain_core.vectorstores import VectorStore
 from langchain.schema import Document
 from langchain.schema.embeddings import Embeddings
 from langchain.schema.vectorstore import VST, VectorStore
+
 from langchain.storage import InMemoryStore
 from langchain.text_splitter import TokenTextSplitter
 from pytest_mock import MockerFixture
@@ -29,6 +33,7 @@ from tests.unit_tests.document_transformers.test_runnable_transformers import (
     UpperLazyTransformer,
 )
 
+VST = TypeVar("VST", bound="VectorStore")
 
 class FakeUUID:
     def __init__(self, prefix: str):

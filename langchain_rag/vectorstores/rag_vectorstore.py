@@ -14,9 +14,16 @@ from typing import (
 )
 
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
+
+# Note: Import directly from langchain_core is not stable and generate some errors
+# from langchain_core.pydantic_v1 import BaseModel, Extra, Field
+# from langchain_core.stores import BaseStore
+# from langchain_core.documents import BaseDocumentTransformer, Document
+# from langchain_core.embeddings import Embeddings
+# from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
+
 from langchain.pydantic_v1 import BaseModel, Extra, Field
-from langchain.schema import BaseStore
-from langchain.schema.document import BaseDocumentTransformer, Document
+from langchain.schema import BaseStore, Document, BaseDocumentTransformer
 from langchain.schema.embeddings import Embeddings
 from langchain.schema.vectorstore import VectorStore, VectorStoreRetriever
 from langchain.storage import EncoderBackedStore

@@ -1,6 +1,9 @@
 import copy
 from typing import Any, AsyncIterator, Iterator
 
+# Note: Import directly from langchain_core is not stable and generate some errors
+# from langchain_core.documents import Document
+
 from langchain.schema import Document
 
 from langchain_rag.document_transformers.runnable_document_transformer import (

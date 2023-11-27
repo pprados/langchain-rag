@@ -13,9 +13,13 @@ from typing import (
     no_type_check,
 )
 
+# Note: Import directly from langchain_core is not stable and generate some errors
+# from langchain_core.documents import BaseDocumentTransformer, Document
+# from langchain_core.runnables import RunnableParallel
+
+from langchain_core.runnables.base import coerce_to_runnable
 from langchain.schema import BaseDocumentTransformer, Document
 from langchain.schema.runnable import RunnableParallel
-from langchain_core.runnables.base import coerce_to_runnable
 
 from .runnable_document_transformer import (
     _LEGACY,
