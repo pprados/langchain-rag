@@ -21,9 +21,8 @@ from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 # from langchain_core.documents import BaseDocumentTransformer, Document
 # from langchain_core.embeddings import Embeddings
 # from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
-
 from langchain.pydantic_v1 import BaseModel, Extra, Field
-from langchain.schema import BaseStore, Document, BaseDocumentTransformer
+from langchain.schema import BaseDocumentTransformer, BaseStore, Document
 from langchain.schema.embeddings import Embeddings
 from langchain.schema.vectorstore import VectorStore, VectorStoreRetriever
 from langchain.storage import EncoderBackedStore
@@ -96,7 +95,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     """The metadata to identify the id of the parents """
 
     chunk_id_key: str = "_chunk_id"
-    """The metadata to identify the chunck. Add an id if the chunk can not have one """
+    """The metadata to identify the chunk. Add an id if the chunk can not have one """
 
     child_ids_key: str = "_child_ids"
     """Contain a list with the vectorstore id for all 
@@ -300,7 +299,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     Document
                 ] = self.chunk_transformer.transform_documents(
                     [chunk_doc]
-                )  # TODO: use multiple documents
+                )  # TOTRY: use multiple documents
                 # If in transformed chunk, add the id of the associated chunk
                 for transformed_chunk in all_transformed_chunk:
                     transformed_chunk.metadata[self.chunk_id_key] = chunk_id
@@ -316,7 +315,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 full_chunk_docs.append((chunk_id, chunk_doc))
 
             # Add the chunks in docstore.
-            # In the retriever, it's this intances to return
+            # In the retriever, it's this instances to return
             # in metadata[child_ids_key], it's possible to find the id of all
             # transformed versions
             self.docstore.mset(full_chunk_docs)
@@ -326,7 +325,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             # we must save the id of all chunk.
             # Then, it's possible to remove/update all chunk when the parent document
             # was updated.
-            # Save the parent association wih all chunk
+            # Save the parent association with all chunk
             ids = cast(List[str], ids)
             mset_values: List[Tuple[str, List[str]]] = []
             for parent_id, doc in zip(ids, documents):
@@ -339,7 +338,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     async def aadd_documents(
         self, documents: List[Document], **kwargs: Any
     ) -> List[str]:
-        # TODO: implement aadd_documents()
+        # PPR: implement aadd_documents() if the pull-request is accepted
         raise NotImplementedError("aadd_documents not implemented")
 
     def delete(self, ids: Optional[List[str]] = None, **kwargs: Any) -> Optional[bool]:
@@ -381,7 +380,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     async def adelete(
         self, ids: Optional[List[str]] = None, **kwargs: Any
     ) -> Optional[bool]:
-        # TODO: implement adelete()
+        # PPR: implement adelete() if the pull-request is accepted
         raise NotImplementedError("adelete not implemented")
 
     @classmethod
@@ -394,7 +393,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     ) -> VST:
         raise NotImplementedError("from_texts not implemented")
 
-    # %% searchs
+    # %% searches
     def _trunk_k(
         self, result: List[Document], kwargs: Dict[str, Any]
     ) -> List[Document]:

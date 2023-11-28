@@ -10,6 +10,11 @@ from typing import (
     cast,
 )
 
+from langchain.chains import LLMChain
+from langchain.output_parsers import PydanticOutputParser
+from langchain.prompts import PromptTemplate
+from langchain.pydantic_v1 import BaseModel
+
 # Note: Import directly from langchain_core is not stable and generate some errors
 # from langchain_core.documents import Document
 # from langchain_core.language_models import BaseLanguageModel
@@ -18,14 +23,8 @@ from typing import (
 # from langchain_core.pydantic_v1 import BaseModel
 # from langchain.chains import LLMChain
 # from langchain.output_parsers import PydanticOutputParser
-
 from langchain.schema import BaseOutputParser, Document
 from langchain.schema.language_model import BaseLanguageModel
-from langchain.prompts import PromptTemplate
-from langchain.pydantic_v1 import BaseModel
-
-from langchain.chains import LLMChain
-from langchain.output_parsers import PydanticOutputParser
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableGeneratorDocumentTransformer,
@@ -53,7 +52,7 @@ _default_parser: BaseOutputParser = PydanticOutputParser(
 _default_template = (
     "1. Given a text input, generate {nb_of_questions} questions from it in "
     "the same language. "
-    "2. Sumarize a text input in the same language.\n"
+    "2. Summarize a text input in the same language.\n"
     "Context:\n"
     "```\n"
     "{context}\n"

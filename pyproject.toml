@@ -47,7 +47,6 @@ pgvector = "*"
 psycopg2-binary = "*"
 #langchain-qa_with_references = { path = "../langchain-qa_with_references", develop = true }
 langchain-qa_with_references = "^0.0.329"
-tiktoken = "^0.3.2"
 faiss-cpu = {version = "^1"}
 
 [tool.poetry.group.lint]

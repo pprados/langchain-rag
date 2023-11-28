@@ -2,36 +2,35 @@ import asyncio
 import threading
 import time
 from abc import ABC, abstractmethod
-
 from typing import (
     TYPE_CHECKING,
     Any,
+    AsyncIterator,
     Iterable,
     Iterator,
     Optional,
     Sequence,
     TypeVar,
     Union,
-    no_type_check, AsyncIterator,
+    no_type_check,
 )
+
+from langchain.pydantic_v1 import BaseModel
 
 # Note: Import directly from langchain_core is not stable and generate some errors
 # from langchain_core.documents import BaseDocumentTransformer, Document
 # from langchain_core.pydantic_v1 import BaseModel
-
 from langchain.schema import BaseDocumentTransformer, Document
-from langchain.pydantic_v1 import BaseModel
-
 from langchain_core.runnables import (
     Runnable,
     RunnableConfig,
 )
 from langchain_core.runnables.base import coerce_to_runnable
 
-
-
 if TYPE_CHECKING:
     from .document_transformers import DocumentTransformers
+else:
+    DocumentTransformers = Any
 
 _LEGACY = True  # Use legacy langchain transformer interface
 

@@ -6,20 +6,21 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type, TypeVar,
+    Type,
+    TypeVar,
 )
 from unittest.mock import call
 
 import pytest
+
 # from langchain_core.documents import Document
 # from langchain_core.embeddings import Embeddings
 # from langchain_core.vectorstores import VectorStore
 from langchain.schema import Document
 from langchain.schema.embeddings import Embeddings
-from langchain.schema.vectorstore import VST, VectorStore
-
+from langchain.schema.vectorstore import VectorStore
 from langchain.storage import InMemoryStore
-from langchain.text_splitter import TokenTextSplitter
+from langchain.text_splitter import CharacterTextSplitter
 from pytest_mock import MockerFixture
 
 from langchain_rag.document_transformers.document_transformers import (
@@ -34,6 +35,7 @@ from tests.unit_tests.document_transformers.test_runnable_transformers import (
 )
 
 VST = TypeVar("VST", bound="VectorStore")
+
 
 class FakeUUID:
     def __init__(self, prefix: str):
@@ -136,7 +138,7 @@ class FakeVectorStore(VectorStore):
         return True
 
 
-class SplitterWithUniqId(TokenTextSplitter):
+class SplitterWithUniqId(CharacterTextSplitter):
     def split_documents(self, documents: Iterable[Document]) -> List[Document]:
         documents = super().split_documents(documents)
         for doc in documents:
@@ -149,6 +151,7 @@ class SplitterWithUniqId(TokenTextSplitter):
 parent_transformer = SplitterWithUniqId(
     chunk_size=1,
     chunk_overlap=0,
+    separator=" ",
     add_start_index=True,
 )
 
@@ -192,7 +195,7 @@ def test_parent_and_chunk_transformer(mocker: MockerFixture) -> None:
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
+    assert result[1].page_content == "word"
     assert spy_add_documents.call_count == 4
     assert ids == [
         hashlib.sha256(
@@ -217,12 +220,12 @@ def test_parent_and_chunk_transformer(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" WORD"],
+                    ["WORD"],
                     [
                         {
                             "id": 1,
-                            "start_index": 5,
-                            "split_id": "1-5",
+                            "start_index": 6,
+                            "split_id": "1-6",
                             vs.chunk_id_key: "chunk-02",
                         }
                     ],
@@ -239,12 +242,12 @@ def test_parent_and_chunk_transformer(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" DAYS"],
+                    ["DAYS"],
                     [
                         {
                             "id": 2,
-                            "start_index": 5,
-                            "split_id": "2-5",
+                            "start_index": 6,
+                            "split_id": "2-6",
                             vs.chunk_id_key: "chunk-04",
                         }
                     ],
@@ -258,7 +261,7 @@ def test_parent_and_chunk_transformer(mocker: MockerFixture) -> None:
 def test_parent_and_chunk_tranformer_childid(mocker: MockerFixture) -> None:
     """
     Sometime, the result of a parent transformation is a list of documents
-    with an uniq id. It's not necessery to inject a new one.
+    with an uniq id. It's not necessary to inject a new one.
     You can set the name of this id with `chunk_id_key`.
 
     parent_transformer = True
@@ -289,7 +292,7 @@ def test_parent_and_chunk_tranformer_childid(mocker: MockerFixture) -> None:
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
+    assert result[1].page_content == "word"
     assert spy_add_documents.call_count == 4
     assert ids == [
         hashlib.sha256(
@@ -313,12 +316,12 @@ def test_parent_and_chunk_tranformer_childid(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" WORD"],
+                    ["WORD"],
                     [
                         {
                             "id": 1,
-                            "start_index": 5,
-                            "split_id": "1-5",
+                            "start_index": 6,
+                            "split_id": "1-6",
                         }
                     ],
                 ),
@@ -333,12 +336,12 @@ def test_parent_and_chunk_tranformer_childid(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" DAYS"],
+                    ["DAYS"],
                     [
                         {
                             "id": 2,
-                            "start_index": 5,
-                            "split_id": "2-5",
+                            "start_index": 6,
+                            "split_id": "2-6",
                         }
                     ],
                 ),
@@ -379,7 +382,7 @@ def test_parent_and_chunk_transformer_ids(mocker: MockerFixture) -> None:
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
+    assert result[1].page_content == "word"
     assert spy_add_documents.call_count == 4
     assert ids == force_ids
     spy_add_documents.assert_has_calls(
@@ -397,12 +400,12 @@ def test_parent_and_chunk_transformer_ids(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" WORD"],
+                    ["WORD"],
                     [
                         {
                             "id": 1,
-                            "start_index": 5,
-                            "split_id": "1-5",
+                            "start_index": 6,
+                            "split_id": "1-6",
                             vs.chunk_id_key: "chunk-02",
                         }
                     ],
@@ -419,12 +422,12 @@ def test_parent_and_chunk_transformer_ids(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" DAYS"],
+                    ["DAYS"],
                     [
                         {
                             "id": 2,
-                            "start_index": 5,
-                            "split_id": "2-5",
+                            "start_index": 6,
+                            "split_id": "2-6",
                             vs.chunk_id_key: "chunk-04",
                         }
                     ],
@@ -466,7 +469,7 @@ def test_chunk_transformer(mocker: MockerFixture) -> None:
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
+    assert result[1].page_content == "word"
     assert spy_add_documents.call_count == 4
     spy_add_documents.assert_has_calls(
         _must_be_called(
@@ -483,12 +486,12 @@ def test_chunk_transformer(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" WORD"],
+                    ["WORD"],
                     [
                         {
                             "id": 1,
-                            "start_index": 5,
-                            "split_id": "1-5",
+                            "start_index": 6,
+                            "split_id": "1-6",
                             vs.chunk_id_key: "chunk-02",
                         }
                     ],
@@ -505,12 +508,12 @@ def test_chunk_transformer(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" DAYS"],
+                    ["DAYS"],
                     [
                         {
                             "id": 2,
-                            "start_index": 5,
-                            "split_id": "2-5",
+                            "start_index": 6,
+                            "split_id": "2-6",
                             vs.chunk_id_key: "chunk-04",
                         }
                     ],
@@ -552,7 +555,7 @@ def test_chunk_transformer_ids(mocker: MockerFixture) -> None:
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
+    assert result[1].page_content == "word"
     assert spy_add_documents.call_count == 4
     assert ids == force_ids
     spy_add_documents.assert_has_calls(
@@ -570,12 +573,12 @@ def test_chunk_transformer_ids(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" WORD"],
+                    ["WORD"],
                     [
                         {
                             "id": 1,
-                            "start_index": 5,
-                            "split_id": "1-5",
+                            "start_index": 6,
+                            "split_id": "1-6",
                             vs.chunk_id_key: "persistance-02",
                         }
                     ],
@@ -592,12 +595,12 @@ def test_chunk_transformer_ids(mocker: MockerFixture) -> None:
                     ],
                 ),
                 (
-                    [" DAYS"],
+                    ["DAYS"],
                     [
                         {
                             "id": 2,
-                            "start_index": 5,
-                            "split_id": "2-5",
+                            "start_index": 6,
+                            "split_id": "2-6",
                             vs.chunk_id_key: "persistance-04",
                         }
                     ],
@@ -637,7 +640,7 @@ def test_parent_transformer(mocker: MockerFixture) -> None:
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
+    assert result[1].page_content == "word"
     assert spy_add_documents.call_count == 1
     assert ids == [
         hashlib.sha256(
@@ -656,16 +659,16 @@ def test_parent_transformer(mocker: MockerFixture) -> None:
                         metadata={"id": 1, "start_index": 0, "split_id": "1-0"},
                     ),
                     Document(
-                        page_content=" word",
-                        metadata={"id": 1, "start_index": 5, "split_id": "1-5"},
+                        page_content="word",
+                        metadata={"id": 1, "start_index": 6, "split_id": "1-6"},
                     ),
                     Document(
                         page_content="Happy",
                         metadata={"id": 2, "start_index": 0, "split_id": "2-0"},
                     ),
                     Document(
-                        page_content=" days",
-                        metadata={"id": 2, "start_index": 5, "split_id": "2-5"},
+                        page_content="days",
+                        metadata={"id": 2, "start_index": 6, "split_id": "2-6"},
                     ),
                 ],
                 ids=[f"chunk-0{i}" for i in range(1, 5)],
@@ -706,7 +709,7 @@ def test_parent_transformer_ids(mocker: MockerFixture) -> None:
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
+    assert result[1].page_content == "word"
     assert spy_add_documents.call_count == 1
     assert ids == force_ids
     spy_add_documents.assert_has_calls(
@@ -718,16 +721,16 @@ def test_parent_transformer_ids(mocker: MockerFixture) -> None:
                         metadata={"id": 1, "start_index": 0, "split_id": "1-0"},
                     ),
                     Document(
-                        page_content=" word",
-                        metadata={"id": 1, "start_index": 5, "split_id": "1-5"},
+                        page_content="word",
+                        metadata={"id": 1, "start_index": 6, "split_id": "1-6"},
                     ),
                     Document(
                         page_content="Happy",
                         metadata={"id": 2, "start_index": 0, "split_id": "2-0"},
                     ),
                     Document(
-                        page_content=" days",
-                        metadata={"id": 2, "start_index": 5, "split_id": "2-5"},
+                        page_content="days",
+                        metadata={"id": 2, "start_index": 6, "split_id": "2-6"},
                     ),
                 ],
                 ids=[f"chunk-0{i}" for i in range(1, 5)],
@@ -773,7 +776,7 @@ def test_without_transformer(mocker: MockerFixture) -> None:
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
+    assert result[1].page_content == "word"
     assert spy_add_documents.call_count == 1
     spy_add_documents.assert_has_calls(
         [
@@ -784,16 +787,16 @@ def test_without_transformer(mocker: MockerFixture) -> None:
                         metadata={"id": 1, "start_index": 0, "split_id": "1-0"},
                     ),
                     Document(
-                        page_content=" word",
-                        metadata={"id": 1, "start_index": 5, "split_id": "1-5"},
+                        page_content="word",
+                        metadata={"id": 1, "start_index": 6, "split_id": "1-6"},
                     ),
                     Document(
                         page_content="Happy",
                         metadata={"id": 2, "start_index": 0, "split_id": "2-0"},
                     ),
                     Document(
-                        page_content=" days",
-                        metadata={"id": 2, "start_index": 5, "split_id": "2-5"},
+                        page_content="days",
+                        metadata={"id": 2, "start_index": 6, "split_id": "2-6"},
                     ),
                 ],
                 ids=[f"chunk-0{i}" for i in range(1, 5)],
@@ -834,7 +837,7 @@ def test_without_transformer_ids(mocker: MockerFixture) -> None:
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
-    assert result[1].page_content == " word"
+    assert result[1].page_content == "word"
     assert spy_add_documents.call_count == 1
     assert ids == force_ids
     spy_add_documents.assert_has_calls(
@@ -846,16 +849,16 @@ def test_without_transformer_ids(mocker: MockerFixture) -> None:
                         metadata={"id": 1, "start_index": 0, "split_id": "1-0"},
                     ),
                     Document(
-                        page_content=" word",
-                        metadata={"id": 1, "start_index": 5, "split_id": "1-5"},
+                        page_content="word",
+                        metadata={"id": 1, "start_index": 6, "split_id": "1-6"},
                     ),
                     Document(
                         page_content="Happy",
                         metadata={"id": 2, "start_index": 0, "split_id": "2-0"},
                     ),
                     Document(
-                        page_content=" days",
-                        metadata={"id": 2, "start_index": 5, "split_id": "2-5"},
+                        page_content="days",
+                        metadata={"id": 2, "start_index": 6, "split_id": "2-6"},
                     ),
                 ],
                 ids=[f"persistance-0{i}" for i in range(1, 5)],

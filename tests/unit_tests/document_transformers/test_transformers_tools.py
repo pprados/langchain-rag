@@ -1,14 +1,13 @@
 from typing import Dict
 
-
 import pytest
 
 # Note: Import directly from langchain_core is not stable and generate some errors
 # from langchain_core.language_models import BaseLLM
 # from langchain_core.documents import Document
-
 from langchain.llms import BaseLLM
 from langchain.schema import Document
+
 from langchain_rag.document_transformers.copy_transformer import CopyDocumentTransformer
 from langchain_rag.document_transformers.generate_questions import (
     GenerateQuestionsTransformer,

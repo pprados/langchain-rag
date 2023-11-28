@@ -1,5 +1,13 @@
-from typing import Any, Callable, Dict, Iterator, Optional, Sequence, cast, \
-    AsyncIterator
+from typing import (
+    Any,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Iterator,
+    Optional,
+    Sequence,
+    cast,
+)
 
 from langchain.chains import LLMChain
 
@@ -8,7 +16,6 @@ from langchain.chains import LLMChain
 # from langchain_core.language_models import BaseLanguageModel
 # from langchain_core.output_parsers import BaseOutputParser, NumberedListOutputParser
 # from langchain_core.prompts import PromptTemplate
-
 from langchain.output_parsers import NumberedListOutputParser
 from langchain.prompts import PromptTemplate
 from langchain.schema import BaseOutputParser, Document
@@ -61,7 +68,7 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
     ) -> Iterator[Document]:
         _callbacks = kwargs.get("callbacks", None)
         max_retry = 3
-        for doc in documents:  # TODO: work with batch
+        for doc in documents:  # PPR: work with batch?
             _input = {
                 **self.get_input(doc),
                 **{"nb_of_questions": self.nb_of_questions},
@@ -84,7 +91,7 @@ class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
     ) -> AsyncIterator[Document]:
         """Compress page content of raw documents asynchronously."""
         _callbacks = kwargs.get("callbacks", None)
-        async for doc in documents:  # TODO: work with batch
+        async for doc in documents:  # PPR: work with batch?
             _input = {
                 **self.get_input(doc),
                 **{"nb_of_questions": self.nb_of_questions},
