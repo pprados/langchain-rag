@@ -1,3 +1,5 @@
+> a [pull-request](https://github.com/langchain-ai/langchain/pull/13910) with this code was proposed to langchain.
+
 When splitting documents for retrieval, there are often conflicting desires:
 
 1. You may want to keep documents small, ensuring that their embeddings accurately represent their meaning. If they become too long, the embeddings can lose their meaning.
