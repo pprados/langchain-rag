@@ -9,7 +9,10 @@ from langchain_rag.document_transformers.document_transformers import (
     DocumentTransformers,
 )
 
-from .sample_transformer import LowerLazyTransformer, UpperLazyTransformer
+from .sample_transformer import (
+    LowerLazyTransformer,
+    UpperLazyTransformer,
+)
 
 
 def by_pg(doc: Document) -> str:
@@ -138,11 +141,11 @@ def test_lcel_add_transform_documents() -> None:
     assert len((x + x + x).transformers) == 3
 
 
-@pytest.mark.skipif(not _LEGACY, reason="Test only runnable transformer")
+@pytest.mark.skipif(_LEGACY, reason="Test only runnable transformer")
 def test_lcel_add_mixte_transform_documents() -> None:
     """Test create documents method."""
     x = UpperLazyTransformer()
-    y = CharacterTextSplitter()
+    y = LowerLazyTransformer()
     assert len((y + x).transformers) == 2
     assert len((x + y).transformers) == 2
     assert len(((x + x) + y).transformers) == 3

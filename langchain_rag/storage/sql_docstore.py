@@ -90,7 +90,7 @@ class SQLStore(BaseStore[str, bytes]):
         self,
         *,
         namespace: str,
-        db_url: Union[str, Path],
+        db_url: Optional[Union[str, Path]] = None,
         engine: Optional[Union[Engine, AsyncEngine]] = None,
         engine_kwargs: Optional[Dict[str, Any]] = None,
         async_mode: bool = False,

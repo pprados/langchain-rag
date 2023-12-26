@@ -195,3 +195,11 @@ pull-sync:
 	find . -type f -name '*.ipynb' | xargs sed -i 's/langchain\([_-]\)experimental/langchain\1qa_with_references/g'
 
 
+## Validate the code
+validate: format lint spell_check test
+
+## Refresh lock
+lock:
+	poetry lock
+	git add poetry.lock
+	poetry install --with dev,lint,test,codespell

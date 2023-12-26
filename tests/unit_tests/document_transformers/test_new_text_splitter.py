@@ -4,10 +4,12 @@ This is to demonstrate that it is possible to convert legacy implementations
 while maintaining compatibility with current TUs.
 """
 import re
-from typing import Iterator, cast
+from typing import AsyncIterator, Iterator, cast
 
 import pytest
 from langchain.docstore.document import Document
+
+from langchain_rag.document_transformers.document_transformers import _LEGACY
 
 from .new_text_splitter import NewCharacterTextSplitter
 
@@ -287,6 +289,7 @@ def test_metadata_not_shallow() -> None:
     assert docs[1].metadata == {"source": "1"}
 
 
+@pytest.mark.skipif(_LEGACY, reason="Test only runnable transformer")
 def test_lcel_transform_documents() -> None:
     """Test create documents method."""
     texts = ["foo bar", "baz"]
@@ -294,7 +297,7 @@ def test_lcel_transform_documents() -> None:
         separator=" ", chunk_size=3, chunk_overlap=0
     ) | CharacterTextSplitter(separator=" ", chunk_size=1, chunk_overlap=0)
     input_docs = [Document(page_content=text) for text in texts]
-    docs = list(runnable.invoke(input_docs))
+    docs = list(cast(Iterator[Document], runnable.invoke(input_docs)))
     expected_docs = [
         Document(page_content="foo"),
         Document(page_content="bar"),
@@ -303,6 +306,7 @@ def test_lcel_transform_documents() -> None:
     assert docs == expected_docs
 
 
+@pytest.mark.skipif(_LEGACY, reason="Test only runnable transformer")
 @pytest.mark.asyncio
 async def test_alcel_transform_documents() -> None:
     """Test create documents method."""
@@ -311,7 +315,12 @@ async def test_alcel_transform_documents() -> None:
         separator=" ", chunk_size=3, chunk_overlap=0
     ) | CharacterTextSplitter(separator=" ", chunk_size=1, chunk_overlap=0)
     input_docs = [Document(page_content=text) for text in texts]
-    docs = [doc async for doc in await runnable.ainvoke(input_docs)]
+    docs = [
+        doc
+        async for doc in cast(
+            AsyncIterator[Document], await runnable.ainvoke(input_docs)
+        )
+    ]
     expected_docs = [
         Document(page_content="foo"),
         Document(page_content="bar"),

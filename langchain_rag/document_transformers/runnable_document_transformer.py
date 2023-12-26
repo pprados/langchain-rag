@@ -12,6 +12,7 @@ from typing import (
     Sequence,
     TypeVar,
     Union,
+    cast,
     no_type_check,
 )
 
@@ -113,7 +114,7 @@ def to_sync_iterator(async_iterable: AsyncIterator[T], maxsize: int = 0) -> Iter
     t.join()
 
 
-Input = Union[AsyncIterator[Document], Iterator[Document]]
+Input = Union[AsyncIterator[Document], Iterator[Document], Sequence[Document]]
 Output = Union[AsyncIterator[Document], Iterator[Document]]
 
 
@@ -177,15 +178,18 @@ class RunnableGeneratorDocumentTransformer(
                 return DocumentTransformers(transformers=[self, other])
             else:
                 return DocumentTransformers(
-                    transformers=[self, coerce_to_runnable(other)]
+                    transformers=[
+                        self,
+                        cast(BaseDocumentTransformer, coerce_to_runnable(other)),
+                    ]
                 )
 
     if _LEGACY:
 
         def __radd__(
             self,
-            other: "RunnableGeneratorDocumentTransformer",
-        ) -> DocumentTransformers:
+            other: DocumentTransformers,
+        ) -> "RunnableGeneratorDocumentTransformer":
             return self.__add__(other)
 
     def transform_documents(
@@ -225,7 +229,7 @@ class RunnableGeneratorDocumentTransformer(
     @no_type_check  # Bug in Mypy
     async def alazy_transform_documents(
         self,
-        documents: Union[AsyncIterator[Document], Iterator[Document]],
+        documents: Input,
         **kwargs: Any,
     ) -> AsyncIterator[Document]:
         """Asynchronously transform an iterator of documents.
@@ -236,7 +240,9 @@ class RunnableGeneratorDocumentTransformer(
         Returns:
             An iterator of transformed Documents.
         """
-        if isinstance(documents, AsyncIterator):
+        if isinstance(documents, Iterable):
+            async_documents = to_async_iterator(iter(documents))
+        elif isinstance(documents, AsyncIterator):
             async_documents = documents
         else:
             async_documents = to_async_iterator(documents)
@@ -246,26 +252,43 @@ class RunnableGeneratorDocumentTransformer(
 
     def invoke(
         self,
-        input: Union[Iterator[Document], AsyncIterator[Document]],
+        input: Input,
         config: Optional[RunnableConfig] = None,
         **kwargs: Any,
-    ) -> Union[Iterator[Document], AsyncIterator[Document]]:
+    ) -> Output:
         if isinstance(input, AsyncIterator):
             raise ValueError("Use ainvoke() with async iterator")
         config = config or {}
 
         if hasattr(self, "lazy_transform_documents"):
-            return self.lazy_transform_documents(input, **config)
+            iterator = iter(input) if isinstance(input, Sequence) else input
+            return self.lazy_transform_documents(iterator, **config)
 
-        # Default implementation, without generator
-        return iter(self.transform_documents(list(input), **config))
+        # Default implementation, without generator/iterator
+        if isinstance(input, Sequence):
+            return iter(self.transform_documents(input, **config))
+        else:
+            return iter(self.transform_documents(list(input), **config))
 
     async def ainvoke(
         self,
-        input: Union[Iterable[Document], AsyncIterator[Document]],
+        input: Input,
         config: Optional[RunnableConfig] = None,
         **kwargs: Optional[Any],
-    ) -> Union[AsyncIterator[Document], Iterator[Document]]:
+    ) -> Output:
         # # Default implementation, without generator
         config = config or {}
-        return self.alazy_transform_documents(documents=input, **config)  # type:ignore
+
+        if hasattr(self, "lazy_transform_documents"):
+            iterator = iter(input) if isinstance(input, Sequence) else input
+            return self.alazy_transform_documents(iterator, **config)
+
+        # Default implementation, without generator/iterator
+        if isinstance(input, Sequence):
+            return iter(await self.atransform_documents(input, **config))
+        elif isinstance(input, AsyncIterator):
+            return iter(
+                await self.atransform_documents([doc async for doc in input], **config)
+            )
+        else:
+            return iter(await self.atransform_documents(list(input), **config))

@@ -10,16 +10,14 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    cast,
     no_type_check,
 )
 
-from langchain.schema import BaseDocumentTransformer, Document
-from langchain.schema.runnable import RunnableParallel
-
+# from langchain.schema import BaseDocumentTransformer, Document
 # Note: Import directly from langchain_core is not stable and generate some errors
-# from langchain_core.documents import BaseDocumentTransformer, Document
-# from langchain_core.runnables import RunnableParallel
-from langchain_core.runnables.base import coerce_to_runnable
+from langchain_core.documents import BaseDocumentTransformer, Document
+from langchain_core.runnables.base import RunnableParallel, coerce_to_runnable
 
 from .runnable_document_transformer import (
     _LEGACY,
@@ -91,7 +89,7 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
 
     def __add__(
         self,
-        other: "DocumentTransformers",
+        other: RunnableGeneratorDocumentTransformer,
     ) -> "DocumentTransformers":
         """Compose this runnable with another object to create a RunnableSequence."""
         if isinstance(other, DocumentTransformers):
@@ -105,7 +103,8 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
                 )
             else:
                 return DocumentTransformers(
-                    transformers=list(self.transformers) + [coerce_to_runnable(other)]
+                    transformers=list(self.transformers)
+                    + [cast(BaseDocumentTransformer, coerce_to_runnable(other))]
                 )
 
     @no_type_check  # Bug in Mypy

@@ -45,7 +45,7 @@ id_key = "id"
 nb_documents_to_import = 3
 top_k = 4
 
-context_size = 4096  # For the demonstration use a smal context_size.
+context_size = 4096  # For the demonstration use a small context_size.
 max_tokens = int(context_size * (30 / 100))  # x% for the response
 max_input_tokens = (
     context_size - max_tokens
@@ -195,7 +195,7 @@ chunk_transformer = DocumentTransformers(
     ]
 )
 
-# %% Prepare the persistance
+# %% Prepare the persistence
 pathlib.Path(ROOT_PATH).mkdir(exist_ok=True)
 
 chroma_vectorstore = Chroma(
