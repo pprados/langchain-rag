@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "langchain-rag"
-version = "0.0.352"
+version = "0.0.353"
 description = "This is a temporary project while I wait for my langchain [pull-request](https://github.com/langchain-ai/langchain/pull/7278) to be validated."
 authors = ["Philippe PRADOS"]
 license = "Apache 2.0"
@@ -10,7 +10,7 @@ packages = [{ include = "langchain_rag" }]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
-langchain = ">=0.0.352"
+langchain = ">=0.0.353"
 #langchain-core = ">=0.0.4"
 jupyter = "^1.0.0"
 
@@ -55,8 +55,7 @@ optional = true
 [tool.poetry.group.lint.dependencies]
 #mypy = "^0.991"
 mypy = { git = "https://github.com/python/mypy.git", branch = "master" }
-
-ruff = "^0.0.249"
+ruff = "^0.1.9"
 types-toml = "^0.10.8.1"
 types-redis = "^4.3.21.6"
 types-pytz = "^2023.3.0.0"

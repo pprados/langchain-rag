@@ -127,6 +127,9 @@ class SQLStore(BaseStore[str, bytes]):
     def create_schema(self) -> None:
         Base.metadata.create_all(self.engine)
 
+    def drop(self) -> None:
+        Base.metadata.drop_all(bind=self.engine.connect())
+
     # async def amget(self, keys: Sequence[K]) -> List[Optional[V]]:
     #     result = {}
     #     async with self._make_session() as session:
@@ -162,23 +165,29 @@ class SQLStore(BaseStore[str, bytes]):
     #             session.commit()
 
     def mset(self, key_value_pairs: Sequence[Tuple[str, bytes]]) -> None:
-        with self._make_session() as session:
-            self._mdetete([key for key, _ in key_value_pairs], session)
-            session.add_all(
-                [
-                    Value(namespace=self.namespace, key=k, value=v)
-                    for k, v in key_value_pairs
-                ]
-            )
-            session.commit()
+        try:
+            with self._make_session() as session:
+                with session.begin():
+                    self._mdetete([key for key, _ in key_value_pairs], session)
+                    session.add_all(
+                        [
+                            Value(namespace=self.namespace, key=k, value=v)
+                            for k, v in key_value_pairs
+                        ]
+                    )
+                    # TODO:  sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "docstore_pkey" # noqa: E501
+                # DETAIL:  Key (namespace, key)=(postgres/faq-Summarize, fake://SF_187278949112625428) already exists. # noqa: E501
+        except Exception as e:
+            pass  # TODO
 
     def _mdetete(self, keys: Sequence[str], session: Session) -> None:
-        session.query(Value).filter(  # type: ignore
-            and_(
-                Value.key.in_(keys),
-                Value.namespace == self.namespace,
-            )
-        ).delete()
+        with session.begin():
+            session.query(Value).filter(  # type: ignore
+                and_(
+                    Value.key.in_(keys),
+                    Value.namespace == self.namespace,
+                )
+            ).delete()
 
     # async def _amdetete(self, keys: Sequence[str], session: Session) -> None:
     #     await session.query(Value).filter(

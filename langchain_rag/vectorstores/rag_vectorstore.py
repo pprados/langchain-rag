@@ -26,6 +26,12 @@ from langchain.schema import BaseDocumentTransformer, BaseStore, Document
 from langchain.schema.embeddings import Embeddings
 from langchain.schema.vectorstore import VectorStore, VectorStoreRetriever
 from langchain.storage import EncoderBackedStore
+from sqlalchemy import (
+    Engine,
+)
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+)
 
 from .wrapper_vectorstore import WrapperVectorStore
 
@@ -198,7 +204,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 Returns:
                     List of relevant documents
                 """
-                vectorstore = cast(RAGVectorStore, self.vectorstore)
+                vectorstore = self.vectorstore
                 sub_docs = vectorstore.search(
                     query, search_type=self.search_type, **self.search_kwargs
                 )
@@ -262,15 +268,20 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             ids = None
 
         if self.parent_transformer:
-            chunk_documents = list(
-                self.parent_transformer.transform_documents(documents)
-            )
+            if hasattr(self.parent_transformer, "lazy_transform_documents"):
+                chunk_documents = list(
+                    self.parent_transformer.lazy_transform_documents(iter(documents))
+                )
+            else:
+                chunk_documents = list(
+                    self.parent_transformer.transform_documents(documents)
+                )
         else:
             chunk_documents = documents
 
         if chunk_ids is None:
             # Generate an id for each chunk, or use the ids
-            # Put the associated chunk id the the transformation.
+            # Put the associated chunk id after the transformation.
             # Then, it's possible to retrieve the original chunk with this
             # transformation.
             # for chunk in chunk_documents
@@ -570,12 +581,13 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     @staticmethod
     def from_vs_in_sql(
         vectorstore: VectorStore,
-        db_url: str,
+        engine: Optional[Union[Engine, AsyncEngine]] = None,
+        engine_kwargs: Optional[Dict[str, Any]] = None,
+        db_url: Optional[str] = None,
         namespace: str = "rag_vectorstore",
         *,
         chunk_transformer: Optional[BaseDocumentTransformer] = None,
         parent_transformer: Optional[BaseDocumentTransformer] = None,
-        source_id_key: str = "source",
         **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         import pickle
@@ -584,19 +596,38 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         from ..storage.sql_docstore import SQLStore
 
-        record_manager = SQLRecordManager(namespace=namespace, db_url=db_url)
-        record_manager.create_schema()
-        sql_docstore = SQLStore(
-            namespace=namespace,
-            db_url=db_url,
-        )
-        sql_docstore.create_schema()
-        docstore = EncoderBackedStore[str, Union[Document, List[str]]](
-            store=sql_docstore,
-            key_encoder=lambda x: x,
-            value_serializer=pickle.dumps,
-            value_deserializer=pickle.loads,
-        )
+        if not db_url and not engine:
+            raise ValueError("Set db_url or engine")
+        if db_url:
+            record_manager = SQLRecordManager(namespace=namespace, db_url=db_url)
+            record_manager.create_schema()
+            sql_docstore = SQLStore(
+                namespace=namespace,
+                db_url=db_url,
+            )
+            sql_docstore.create_schema()
+            docstore = EncoderBackedStore[str, Union[Document, List[str]]](
+                store=sql_docstore,
+                key_encoder=lambda x: x,
+                value_serializer=pickle.dumps,
+                value_deserializer=pickle.loads,
+            )
+        else:
+            record_manager = SQLRecordManager(
+                namespace=namespace, engine=engine, engine_kwargs=engine_kwargs
+            )
+            record_manager.create_schema()
+            sql_docstore = SQLStore(
+                namespace=namespace, engine=engine, engine_kwargs=engine_kwargs
+            )
+            sql_docstore.create_schema()
+            docstore = EncoderBackedStore[str, Union[Document, List[str]]](
+                store=sql_docstore,
+                key_encoder=lambda x: x,
+                value_serializer=pickle.dumps,
+                value_deserializer=pickle.loads,
+            )
+
         vectorstore = RAGVectorStore(
             vectorstore=vectorstore,
             docstore=docstore,
@@ -609,6 +640,6 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             {
                 "record_manager": record_manager,
                 "vector_store": vectorstore,
-                "source_id_key": source_id_key,
+                "source_id_key": kwargs.get("source_id_key", "source"),
             },
         )
