@@ -435,7 +435,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     async def asimilarity_search(
         self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
-        return await self.asimilarity_search(
+        return await self.asearch(
             query=query, search_type="similarity", k=k, **kwargs
         )
 
