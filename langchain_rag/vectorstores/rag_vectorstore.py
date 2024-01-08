@@ -204,6 +204,8 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 Returns:
                     List of relevant documents
                 """
+                if not query:
+                    return []
                 vectorstore = self.vectorstore
                 sub_docs = vectorstore.search(
                     query, search_type=self.search_type, **self.search_kwargs
@@ -435,9 +437,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     async def asimilarity_search(
         self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
-        return await self.asearch(
-            query=query, search_type="similarity", k=k, **kwargs
-        )
+        return await self.asearch(query=query, search_type="similarity", k=k, **kwargs)
 
     def similarity_search_with_score(
         self, query: str, k: int = 4, **kwargs: Any
