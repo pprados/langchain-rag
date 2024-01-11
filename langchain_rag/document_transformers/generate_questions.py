@@ -10,16 +10,10 @@ from typing import (
 )
 
 from langchain.chains import LLMChain
-
-# Note: Import directly from langchain_core is not stable and generate some errors
-# from langchain_core.documents import Document
-# from langchain_core.language_models import BaseLanguageModel
-# from langchain_core.output_parsers import BaseOutputParser, NumberedListOutputParser
-# from langchain_core.prompts import PromptTemplate
-from langchain.output_parsers import NumberedListOutputParser
-from langchain.prompts import PromptTemplate
-from langchain.schema import BaseOutputParser, Document
-from langchain.schema.language_model import BaseLanguageModel
+from langchain_core.documents import Document
+from langchain_core.language_models import BaseLanguageModel
+from langchain_core.output_parsers import BaseOutputParser, NumberedListOutputParser
+from langchain_core.prompts import PromptTemplate
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableGeneratorDocumentTransformer,

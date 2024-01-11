@@ -195,6 +195,12 @@ pull-sync:
 	find . -type f -name '*.ipynb' | xargs sed -i 's/langchain\([_-]\)experimental/langchain\1qa_with_references/g'
 
 
+poetry.lock: pyproject.toml
+	poetry lock
+	git add poetry.lock
+	poetry install --with dev,lint,test,codespell
+
+
 ## Refresh lock
 lock: poetry.lock
 

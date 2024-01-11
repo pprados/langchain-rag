@@ -14,8 +14,6 @@ from typing import (
     no_type_check,
 )
 
-# from langchain.schema import BaseDocumentTransformer, Document
-# Note: Import directly from langchain_core is not stable and generate some errors
 from langchain_core.documents import BaseDocumentTransformer, Document
 from langchain_core.runnables.base import RunnableParallel, coerce_to_runnable
 

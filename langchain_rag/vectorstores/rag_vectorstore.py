@@ -13,19 +13,12 @@ from typing import (
     cast,
 )
 
-from langchain.callbacks.manager import CallbackManagerForRetrieverRun
-
-# Note: Import directly from langchain_core is not stable and generate some errors
-# from langchain_core.pydantic_v1 import BaseModel, Extra, Field
-# from langchain_core.stores import BaseStore
-# from langchain_core.documents import BaseDocumentTransformer, Document
-# from langchain_core.embeddings import Embeddings
-# from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
-from langchain.pydantic_v1 import BaseModel, Extra, Field
-from langchain.schema import BaseDocumentTransformer, BaseStore, Document
-from langchain.schema.embeddings import Embeddings
-from langchain.schema.vectorstore import VectorStore, VectorStoreRetriever
 from langchain.storage import EncoderBackedStore
+from langchain_core.documents import BaseDocumentTransformer, Document
+from langchain_core.embeddings import Embeddings
+from langchain_core.pydantic_v1 import BaseModel, Extra, Field
+from langchain_core.stores import BaseStore
+from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from sqlalchemy import (
     Engine,
 )
@@ -159,16 +152,25 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     def _update_score_of_chunk(
         self, sub_chunks_and_score: List[Tuple[Document, float]]
     ) -> List[Tuple[Document, float]]:
+        if not self.chunk_transformer:
+            return sub_chunks_and_score
         ids = []
         scores: Dict[str, float] = {}
+        key = self.chunk_id_key
+        # if self.chunk_transformer:
+        #     key=self.chunk_id_key
+        # else:
+        #     key=self.source_id_key
         for d, s in sub_chunks_and_score:
-            if d.metadata[self.chunk_id_key] not in ids:
-                chunk_id = d.metadata[self.chunk_id_key]
+            if d.metadata[key] not in ids:
+                chunk_id = d.metadata[key]
                 ids.append(chunk_id)
                 chunk_s = scores.get(chunk_id, -1.0)
                 scores[chunk_id] = max(chunk_s, s)
         docs = cast(Sequence[Document], self.docstore.mget(ids))
-        map_ids = {doc.metadata[self.source_id_key]: i for doc, i in zip(docs, ids)}
+        map_ids = {
+            doc.metadata[self.source_id_key]: i for doc, i in zip(docs, ids) if doc
+        }
         return [
             (d, scores[map_ids[d.metadata[self.source_id_key]]])
             for d in docs
@@ -187,36 +189,16 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         else:
             return result
 
-    def as_retriever(self, **kwargs: Any) -> VectorStoreRetriever:
+    def as_retriever(
+        self, search_type: str = "similarity", search_kwargs: dict = {}, **kwargs: Any
+    ) -> VectorStoreRetriever:
         if not self.chunk_transformer:
             return self.vectorstore.as_retriever(**kwargs)
 
-        class ParentVectorRetriever(VectorStoreRetriever):
-            """Retrieve from a set of multiple embeddings for the same document."""
-
-            def _get_relevant_documents(
-                me, query: str, *, run_manager: CallbackManagerForRetrieverRun
-            ) -> List[Document]:
-                """Get documents relevant to a query.
-                Args:
-                    query: String to find relevant documents for
-                    run_manager: The callbacks handler to use
-                Returns:
-                    List of relevant documents
-                """
-                if not query:
-                    return []
-                vectorstore = self.vectorstore
-                sub_docs = vectorstore.search(
-                    query, search_type=self.search_type, **self.search_kwargs
-                )
-                return self._get_trunk_from_sub_docs(sub_docs)
-
-        return ParentVectorRetriever(
-            vectorstore=self,
-            search_type=self.search_type,
-            search_kwargs=self.search_kwargs,
+        retriever = VectorStoreRetriever(
+            vectorstore=self, search_type=search_type, search_kwargs=search_kwargs
         )
+        return retriever
 
     def add_documents(
         self,
@@ -393,8 +375,40 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     async def adelete(
         self, ids: Optional[List[str]] = None, **kwargs: Any
     ) -> Optional[bool]:
-        # PPR: implement adelete() if the pull-request is accepted
-        raise NotImplementedError("adelete not implemented")
+        if not ids:
+            raise ValueError("ids must be set")
+        if self.parent_transformer:
+            if not ids:
+                raise ValueError("ids must be set")
+            lists_of_chunk_by_doc_ids = cast(List[List[str]], self.docstore.mget(ids))
+            chunk_by_doc_ids: List[str] = []
+            for list_of_ids in lists_of_chunk_by_doc_ids:
+                if list_of_ids:
+                    chunk_by_doc_ids.extend([id for id in list_of_ids])
+        else:
+            chunk_by_doc_ids = ids
+
+        if not any(chunk_by_doc_ids):
+            return False
+
+        transformed_ids = set()
+        if self.chunk_transformer:
+            chunk_docs = cast(List[Document], self.docstore.mget(chunk_by_doc_ids))
+            self.docstore.mdelete(chunk_by_doc_ids)
+            for chunk_doc in chunk_docs:
+                if chunk_doc:
+                    transformed_ids.update(
+                        chunk_doc.metadata[self.child_ids_key].split(",")
+                    )
+        if transformed_ids:
+            await self.vectorstore.adelete(ids=list(transformed_ids))
+        elif self.parent_transformer:
+            return await self.vectorstore.adelete(ids=chunk_by_doc_ids)
+        elif not self.parent_transformer and self.chunk_transformer:
+            return len(transformed_ids) != 0
+        else:
+            return await self.vectorstore.adelete(ids=ids)
+        return False
 
     @classmethod
     def from_texts(
@@ -463,18 +477,18 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs_and_score = self.vectorstore.similarity_search_with_relevance_scores(
             query=query, **_search_kwargs
         )
-        return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
+        return self._update_score_of_chunk(subdocs_and_score)[:k]
 
     async def asimilarity_search_with_relevance_scores(
         self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
-        # _search_kwargs = {**kwargs, **self.search_kwargs}
-        # subdocs_and_score = await self.vectorstore.
-        # asimilarity_search_with_relevance_scores(
-        #     query=query, _search_kwargs
-        # )
-        # return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, **kwargs)
-        raise NotImplementedError("Not yet")
+        _search_kwargs = {**kwargs, **self.search_kwargs}
+        subdocs_and_score = (
+            await self.vectorstore.asimilarity_search_with_relevance_scores(
+                query=query, **_search_kwargs
+            )
+        )
+        return self._update_score_of_chunk(subdocs_and_score)[:k]
 
     def similarity_search_by_vector(
         self, embedding: List[float], k: int = 4, **kwargs: Any
@@ -592,8 +606,11 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         import pickle
 
-        from langchain.indexes import SQLRecordManager
+        from langchain_rag.indexes import (
+            SQLRecordManager,
+        )
 
+        # FIXME: when the PR will be accepted
         from ..storage.sql_docstore import SQLStore
 
         if not db_url and not engine:

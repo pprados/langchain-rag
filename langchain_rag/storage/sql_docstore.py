@@ -12,9 +12,7 @@ from typing import (
     Union,
 )
 
-# Note: Import directly from langchain_core is not stable and generate some errors
-# from langchain_core.stores import BaseStore
-from langchain.schema import BaseStore
+from langchain_core.stores import BaseStore
 from sqlalchemy import (
     Column,
     Engine,
@@ -59,6 +57,8 @@ class Value(Base):  # type: ignore[valid-type,misc]
     value: Any = Column("earthquake", PickleType(comparator=items_equal))
 
 
+# This is a fix of original SQLStore.
+# This can will be removed when a PR will be merged.
 class SQLStore(BaseStore[str, bytes]):
     """BaseStore interface that works on an SQL database.
 
