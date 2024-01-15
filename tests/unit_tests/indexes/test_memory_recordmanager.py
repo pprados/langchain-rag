@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 
 import pytest
-from langchain.schema.embeddings import Embeddings
+from langchain_core.embeddings import Embeddings
 
 from langchain_rag.indexes import MemoryRecordManager
 

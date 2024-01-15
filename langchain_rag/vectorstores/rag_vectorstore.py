@@ -57,9 +57,9 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         .. code-block:: python
 
             # Imports
-            from langchain.vectorstores import Chroma
-            from langchain.embeddings import OpenAIEmbeddings
-            from langchain.text_splitter import RecursiveCharacterTextSplitter
+            from langchain_community.vectorstores import Chroma
+            from langchain_openai.embeddings import OpenAIEmbeddings
+            from langchain_core.text_splitter import RecursiveCharacterTextSplitter
             from langchain.storage import InMemoryStore
 
             # This text splitter is used to create the parent documents

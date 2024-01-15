@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 import requests
-from langchain.schema.embeddings import Embeddings
+from langchain_core.embeddings import Embeddings
 
 from langchain_rag.vectorstores.wrapper_vectorstore import WrapperVectorStore
 
@@ -40,7 +40,7 @@ def _is_api_accessible(url: str) -> bool:
 
 @pytest.mark.requires("faiss")
 def test_from_text() -> None:
-    from langchain.vectorstores import FAISS
+    from langchain_community.vectorstores import FAISS
 
     wrapper_vs = WrapperVectorStore.from_texts(
         vectorstore_cls=FAISS,
@@ -58,7 +58,7 @@ def test_self_query_with_wrapper_vectorstore() -> None:
             ChromaTranslator,
             _get_builtin_translator,
         )
-        from langchain.vectorstores.chroma import Chroma
+        from langchain_community.vectorstores.chroma import Chroma
 
         patch.return_value = None
 

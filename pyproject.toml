@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "langchain-rag"
-version = "0.1.0"
+version = "0.1.10"
 description = "This is a temporary project while I wait for my langchain [pull-request](https://github.com/langchain-ai/langchain/pull/7278) to be validated."
 authors = ["Philippe PRADOS"]
 license = "Apache 2.0"
@@ -10,10 +10,8 @@ packages = [{ include = "langchain_rag" }]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
-langchain-core = ">=0.1.0"
-langchain = ">=0.1.0"
-jupyter = "^1.0.0"
-
+langchain-core = "^0.1.10"
+langchain = "^0.1.0"
 
 [tool.poetry.group.dev]
 optional = true
@@ -25,6 +23,7 @@ setuptools = "^67.6.1"
 ipython = "*"
 ipykernel = "*"
 lark = "^1.1"
+langchain_openai = "^0.0.2"
 
 [tool.poetry.group.test.dependencies]
 # The only dependencies that should be added are

@@ -8,10 +8,10 @@ from typing import Any, Dict, List, Optional, Sequence, Union, cast
 
 from dotenv import load_dotenv
 from langchain.chains.query_constructor.schema import AttributeInfo
-from langchain.document_transformers import LongContextReorder
-from langchain.embeddings import CacheBackedEmbeddings, OpenAIEmbeddings
+from langchain_community.document_transformers import LongContextReorder
+from langchain.embeddings import CacheBackedEmbeddings
+from langchain_openai import OpenAIEmbeddings, OpenAI
 from langchain.indexes import index
-from langchain.llms.openai import OpenAI
 from langchain.retrievers import (
     ContextualCompressionRetriever,
     MergerRetriever,
@@ -24,10 +24,10 @@ from langchain.retrievers.document_compressors import (
     DocumentCompressorPipeline,
     EmbeddingsFilter,
 )
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain.storage import LocalFileStore
 from langchain.text_splitter import TokenTextSplitter
-from langchain.vectorstores.chroma import Chroma
+from langchain_community.vectorstores.chroma import Chroma
 
 from langchain_rag.document_transformers import (
     CopyDocumentTransformer,

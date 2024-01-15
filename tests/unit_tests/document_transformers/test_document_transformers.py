@@ -1,8 +1,8 @@
 from typing import Sequence
 
 import pytest
-from langchain.schema import Document
 from langchain.text_splitter import CharacterTextSplitter
+from langchain_core.documents import Document
 
 from langchain_rag.document_transformers.document_transformers import (
     _LEGACY,

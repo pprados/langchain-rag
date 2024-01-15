@@ -1,12 +1,10 @@
 from typing import Dict
 
 import pytest
+from langchain_core.documents import Document
 
 # Note: Import directly from langchain_core is not stable and generate some errors
-# from langchain_core.language_models import BaseLLM
-# from langchain_core.documents import Document
-from langchain.llms import BaseLLM
-from langchain.schema import Document
+from langchain_core.language_models import BaseLLM
 
 from langchain_rag.document_transformers.copy_transformer import CopyDocumentTransformer
 from langchain_rag.document_transformers.generate_questions import (
@@ -38,7 +36,7 @@ def init_llm(
     else:
         import langchain
         from dotenv import load_dotenv
-        from langchain.cache import SQLiteCache
+        from langchain_community.cache import SQLiteCache
 
         load_dotenv()
 

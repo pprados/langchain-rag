@@ -4,7 +4,7 @@ Some very simple transformer (lower, upper), lazy and compatible with LCEL.
 import copy
 from typing import Any, AsyncIterator, Callable, Iterator
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableGeneratorDocumentTransformer,

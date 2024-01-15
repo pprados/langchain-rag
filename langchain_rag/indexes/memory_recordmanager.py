@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 
-from langchain.indexes.base import RecordManager
+from langchain_community.indexes.base import RecordManager
 
 
 class MemoryRecordManager(RecordManager):

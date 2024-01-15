@@ -18,7 +18,7 @@ import decimal
 import uuid
 from typing import Any, AsyncGenerator, Dict, Generator, List, Optional, Sequence, Union
 
-from langchain.indexes.base import RecordManager
+from langchain_community.indexes.base import RecordManager
 from sqlalchemy import (
     URL,
     Column,

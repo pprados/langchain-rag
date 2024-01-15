@@ -7,7 +7,7 @@ import re
 from typing import AsyncIterator, Iterator, cast
 
 import pytest
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 from langchain_rag.document_transformers.document_transformers import _LEGACY
 

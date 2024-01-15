@@ -28,9 +28,9 @@ from typing import (
     cast,
 )
 
-from langchain.pydantic_v1 import root_validator
-from langchain.schema import Document
 from langchain.text_splitter import TokenTextSplitter
+from langchain_core.documents import Document
+from langchain_core.pydantic_v1 import root_validator
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     RunnableGeneratorDocumentTransformer,
