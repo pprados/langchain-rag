@@ -135,23 +135,6 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         else:
             return result
 
-    async def _aget_trunk_from_sub_docs(
-        self, sub_docs: List[Document], **kwargs: Any
-    ) -> List[Document]:
-        if self.chunk_transformer:
-            ids = []
-            for d in sub_docs:
-                if d.metadata[self.chunk_id_key] not in ids:
-                    ids.append(d.metadata[self.chunk_id_key])
-            docs = cast(List[Document], self.docstore.mget(ids))
-            result = [d for d in docs if d is not None]
-        else:
-            result = sub_docs
-        if "k" in kwargs:
-            return result[: kwargs["k"]]
-        else:
-            return result
-
     def _update_score_of_chunk(
         self, sub_chunks_and_score: List[Tuple[Document, float]]
     ) -> List[Tuple[Document, float]]:
@@ -328,10 +311,140 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             return chunk_ids
 
     async def aadd_documents(
-        self, documents: List[Document], **kwargs: Any
+        self,
+        documents: List[Document],
+        *,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> List[str]:
-        # PPR: implement aadd_documents() if the pull-request is accepted
-        raise NotImplementedError("aadd_documents not implemented")
+        """Adds documents to the docstore and vectorstores.
+
+        Args:
+            documents: List of documents to add
+            ids: Optional list of ids for documents. If provided should be the same
+                length as the list of documents. Can provided if parent documents
+                are already in the document store and you don't want to re-add
+                to the docstore. If not provided, random UUIDs will be used as
+                ids.
+        """
+        chunk_ids = None
+        map_doc_ids: Dict[Any, str] = {}
+        if self.parent_transformer:
+            if ids:  # It's the parent ids
+                if len(documents) != len(ids):
+                    raise ValueError(
+                        "Got uneven list of documents and ids. "
+                        "If `ids` is provided, should be same length as `documents`."
+                    )
+
+                for id, doc in zip(ids, documents):
+                    map_doc_ids[doc.metadata[self.source_id_key]] = id
+
+            else:
+                for doc in documents:
+                    if self.source_id_key not in doc.metadata:
+                        raise ValueError("Each document must have a uniq id.")
+                    ids = []
+                    for doc in documents:
+                        # Some docstore refuse some characters in the id.
+                        # We convert the id to hash
+                        doc_id = doc.metadata[self.source_id_key]
+                        hash_id = hashlib.sha256(
+                            str(doc_id).encode("utf-8")
+                        ).hexdigest()
+                        ids.append(hash_id)
+                        map_doc_ids[doc_id] = hash_id
+            await self.adelete(ids=list(map_doc_ids.values()))
+        else:
+            chunk_ids = ids
+            if chunk_ids:
+                await self.adelete(ids=chunk_ids)
+            ids = None
+
+        if self.parent_transformer:
+            if hasattr(self.parent_transformer, "alazy_transform_documents"):
+                chunk_documents = list(
+                    await self.parent_transformer.alazy_transform_documents(
+                        iter(documents)
+                    )
+                )
+            else:
+                chunk_documents = list(
+                    await self.parent_transformer.atransform_documents(documents)
+                )
+        else:
+            chunk_documents = documents
+
+        if chunk_ids is None:
+            # Generate an id for each chunk, or use the ids
+            # Put the associated chunk id after the transformation.
+            # Then, it's possible to retrieve the original chunk with this
+            # transformation.
+            # for chunk in chunk_documents
+            #     if self.chunk_id_key not in chunk.metadata:
+            #         chunk.metadata[self.chunk_id_key]=str(uuid.uuid4())
+            chunk_ids = [
+                chunk.metadata.get(self.chunk_id_key, str(uuid.uuid4()))
+                for chunk in chunk_documents
+            ]
+
+        chunk_ids_for_doc: Dict[str, List[str]] = {}
+        if self.parent_transformer:
+            # Associate each chunk with the parent
+            for chunk_id, chunk_document in zip(chunk_ids, chunk_documents):
+                doc_id = map_doc_ids[chunk_document.metadata[self.source_id_key]]
+                list_of_chunk_ids = chunk_ids_for_doc.get(doc_id, [])
+                list_of_chunk_ids.append(chunk_id)
+                chunk_ids_for_doc[doc_id] = list_of_chunk_ids
+                if self.chunk_id_key not in chunk_document.metadata:
+                    chunk_document.metadata[self.chunk_id_key] = chunk_id
+
+        full_chunk_docs = []
+        if not self.chunk_transformer:
+            await self.vectorstore.aadd_documents(
+                documents=chunk_documents, ids=chunk_ids
+            )
+        else:
+            for chunk_id, chunk_doc in zip(chunk_ids, chunk_documents):
+                all_transformed_chunk: Sequence[
+                    Document
+                ] = await self.chunk_transformer.atransform_documents(
+                    [chunk_doc]
+                )  # PPR: use multiple documents?
+                # If in transformed chunk, add the id of the associated chunk
+                for transformed_chunk in all_transformed_chunk:
+                    transformed_chunk.metadata[self.chunk_id_key] = chunk_id
+                # Save the transformed versions
+                transformed_persistance_ids = await self.vectorstore.aadd_documents(
+                    list(all_transformed_chunk)
+                )
+                # Inject id of transformed ids in the chuck document
+                chunk_doc.metadata[self.child_ids_key] = ",".join(
+                    transformed_persistance_ids
+                )
+                # Prepare the mset in docstore
+                full_chunk_docs.append((chunk_id, chunk_doc))
+
+            # Add the chunks in docstore.
+            # In the retriever, it's this instances to return
+            # in metadata[child_ids_key], it's possible to find the id of all
+            # transformed versions
+            self.docstore.mset(full_chunk_docs)
+
+        if self.parent_transformer:
+            # With the *parent* mode, for each parent document,
+            # we must save the id of all chunk.
+            # Then, it's possible to remove/update all chunk when the parent document
+            # was updated.
+            # Save the parent association with all chunk
+            ids = cast(List[str], ids)
+            mset_values: List[Tuple[str, List[str]]] = []
+            for parent_id, doc in zip(ids, documents):
+                mset_values.append((parent_id, chunk_ids_for_doc[parent_id]))
+            self.docstore.mset(mset_values)
+            return ids
+        else:
+            return chunk_ids
 
     def delete(self, ids: Optional[List[str]] = None, **kwargs: Any) -> Optional[bool]:
         if not ids:
@@ -436,9 +549,11 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     async def asearch(
         self, query: str, search_type: str, **kwargs: Any
     ) -> List[Document]:
-        return await self.vectorstore.asearch(
-            query=query, search_type=search_type, **kwargs
+        _search_kwargs = {**kwargs, **self.search_kwargs}
+        subdocs = await self.vectorstore.asearch(
+            query=query, search_type=search_type, **_search_kwargs
         )
+        return self._get_trunk_from_sub_docs(subdocs, **kwargs)
 
     def similarity_search(
         self, query: str, k: int = 4, **kwargs: Any
@@ -465,9 +580,18 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
 
     async def asimilarity_search_with_score(
-        self, *args: Any, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
-        raise NotImplementedError("Not yet")
+        _search_kwargs = {**kwargs, **self.search_kwargs}
+
+        trunk_k: Optional[int] = self.search_kwargs.get("k")
+        if not trunk_k:
+            _search_kwargs["k"] = k * self.coef_trunk_k
+
+        subdocs_and_score = await self.vectorstore.asimilarity_search_with_score(
+            query=query, **_search_kwargs
+        )
+        return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
 
     def similarity_search_with_relevance_scores(
         self,
@@ -561,7 +685,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs = await self.vectorstore.amax_marginal_relevance_search_by_vector(
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
         )
-        return await self._aget_trunk_from_sub_docs(subdocs)
+        return self._get_trunk_from_sub_docs(subdocs)
 
     @staticmethod
     def from_vs_in_memory(

@@ -59,10 +59,6 @@ def _must_be_called(
 class FakeVectorStore(VectorStore):
     """Simulation of a vectorstore (without embedding)"""
 
-    # def add_documents(self, documents: List[Document], **kwargs: Any) -> List[str]:
-    #     print(f"add_documents({documents=},{kwargs=})")
-    #     return super().add_documents(documents=documents,**kwargs)
-
     def __init__(self) -> None:
         self.uuid = FakeUUID(prefix="Fake-VS-")
         self.docs: Dict[str, List[Document]] = {}
@@ -80,6 +76,11 @@ class FakeVectorStore(VectorStore):
             uuids.append(uuid)
         return uuids
 
+    async def aadd_documents(
+        self, documents: List[Document], **kwargs: Any
+    ) -> List[str]:
+        return self.add_documents(documents, **kwargs)
+
     def add_texts(
         self,
         texts: Iterable[str],
@@ -87,6 +88,14 @@ class FakeVectorStore(VectorStore):
         **kwargs: Any,
     ) -> List[str]:
         return [str(self.uuid()) for _ in texts]
+
+    async def aadd_texts(
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        **kwargs: Any,
+    ) -> List[str]:
+        return self.add_texts(texts, metadatas, **kwargs)
 
     def similarity_search(
         self, query: str, k: int = 4, **kwargs: Any
@@ -99,6 +108,11 @@ class FakeVectorStore(VectorStore):
                     result[id(doc)] = doc
         return list(result.values())
 
+    async def asimilarity_search(
+        self, query: str, k: int = 4, **kwargs: Any
+    ) -> List[Document]:
+        return self.similarity_search(query=query, k=k, **kwargs)
+
     def similarity_search_with_score(
         self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
@@ -107,6 +121,11 @@ class FakeVectorStore(VectorStore):
         c = 1 / len_docs
         return [(doc, (len_docs - i) * c) for i, doc in enumerate(docs)]
 
+    async def asimilarity_search_with_score(
+        self, query: str, k: int = 4, **kwargs: Any
+    ) -> List[Tuple[Document, float]]:
+        return self.similarity_search_with_score(query=query, k=k, **kwargs)
+
     def similarity_search_with_relevance_scores(
         self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
@@ -114,6 +133,11 @@ class FakeVectorStore(VectorStore):
         len_docs = len(docs)
         c = 1 / len_docs
         return [(doc, (len_docs - i) * c) for i, doc in enumerate(docs)]
+
+    async def asimilarity_search_with_relevance_scores(
+        self, query: str, k: int = 4, **kwargs: Any
+    ) -> List[Tuple[Document, float]]:
+        return self.similarity_search_with_relevance_scores(query=query, k=k, **kwargs)
 
     @classmethod
     def from_texts(
@@ -127,6 +151,11 @@ class FakeVectorStore(VectorStore):
         return store
 
     def delete(self, ids: Optional[List[str]] = None, **kwargs: Any) -> Optional[bool]:
+        return True
+
+    async def adelete(
+        self, ids: Optional[List[str]] = None, **kwargs: Any
+    ) -> Optional[bool]:
         return True
 
 
@@ -928,11 +957,10 @@ def test_search_without_parent_transformer(mocker: MockerFixture) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
 async def test_asearch_without_parent_transformer(mocker: MockerFixture) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
-    spy_search = mocker.spy(fake_vs, "search")
+    spy_search = mocker.spy(fake_vs, "asearch")
     vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,  # No parent transformer.
@@ -983,11 +1011,12 @@ def test_similarity_search_without_parent_transformer(mocker: MockerFixture) -> 
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
-async def test_asimilarity_search_without_transformer(mocker: MockerFixture) -> None:
+async def test_asimilarity_search_without_parent_transformer(
+    mocker: MockerFixture,
+) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
-    spy_similarity_search = mocker.spy(fake_vs, "similarity_search")
+    spy_similarity_search = mocker.spy(fake_vs, "asimilarity_search")
     vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,  # No parent transformer.
@@ -1004,6 +1033,9 @@ async def test_asimilarity_search_without_transformer(mocker: MockerFixture) -> 
     # ----
     result = await vs.asimilarity_search("hello", k=2)
     # ----
+    from pprint import pprint  # FIXME
+
+    pprint(result)
     assert len(result) == 2
     assert result[0].page_content == "Hello word"
     assert result[1].page_content == "Hello langchain"
@@ -1046,7 +1078,6 @@ def test_similarity_search_with_score_without_transformer(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
 async def test_asimilarity_search_with_score_without_transformer(
     mocker: MockerFixture,
 ) -> None:
@@ -1114,7 +1145,6 @@ def test_similarity_search_with_score_with_parent_transformer(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
 async def test_asimilarity_search_with_score_with_parent_transformer(
     mocker: MockerFixture,
 ) -> None:
@@ -1182,21 +1212,20 @@ def test_similarity_search_with_score_with_chunk_transformer(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
 async def test_asimilarity_search_with_score_with_chunk_transformer(
     mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
     spy_similarity_search_with_score = mocker.spy(
-        fake_vs, "similarity_search_with_score"
+        fake_vs, "asimilarity_search_with_score"
     )
     vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,
         chunk_transformer=chunk_transformer,
         docstore=docstore,
-        source_id_key="id",
+        chunk_id_key="id",
         search_kwargs={"k": 10},
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
@@ -1208,9 +1237,9 @@ async def test_asimilarity_search_with_score_with_chunk_transformer(
     result = await vs.asimilarity_search_with_score(query="hello", k=2)
     # ----
     assert len(result) == 2
-    assert result[0][0].page_content == "Hello word"
-    assert result[0][0].metadata["id"] == 1
-    assert result[0][1] == 1.0
+    assert result[0][0].page_content == "Hello llm"
+    assert result[0][0].metadata["id"] == 4
+    assert result[0][1] == (1.0 / 3) * 1
     assert result[1][0].page_content == "Hello langchain"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1283,12 +1312,11 @@ def test_similarity_search_with_score_and_search_kwargs(mocker: MockerFixture) -
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
 async def test_asimilarity_search_with_score(mocker: MockerFixture) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
     spy_similarity_search_with_score = mocker.spy(
-        fake_vs, "similarity_search_with_score"
+        fake_vs, "asimilarity_search_with_score"
     )
     vs = RAGVectorStore(
         vectorstore=fake_vs,
@@ -1308,8 +1336,8 @@ async def test_asimilarity_search_with_score(mocker: MockerFixture) -> None:
     # ----
     assert len(result) == 2
     assert result[0][0].page_content == "Hello"
-    assert result[0][0].metadata["id"] == 1
-    assert result[0][1] == 1.0
+    assert result[0][0].metadata["id"] == 4
+    assert result[0][1] == (1.0 / 3) * 1
     assert result[1][0].page_content == "Hello"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1352,7 +1380,6 @@ def test_similarity_search_with_relevance_scores_without_transformer(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
 async def test_asimilarity_search_with_relevance_scores_without_transformer(
     mocker: MockerFixture,
 ) -> None:
@@ -1420,7 +1447,6 @@ def test_similarity_search_with_relevance_scores_with_parent_transformer(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
 async def test_asimilarity_search_with_relevance_scores_with_parent_transformer(
     mocker: MockerFixture,
 ) -> None:
@@ -1488,21 +1514,20 @@ def test_similarity_search_with_relevance_scores_with_chunk_transformer(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
 async def test_asimilarity_search_with_relevance_scores_with_chunk_transformer(
     mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
     spy_similarity_search_with_relevance_scores = mocker.spy(
-        fake_vs, "similarity_search_with_relevance_scores"
+        fake_vs, "asimilarity_search_with_relevance_scores"
     )
     vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,
         chunk_transformer=chunk_transformer,
         docstore=docstore,
-        source_id_key="id",
+        chunk_id_key="id",
         search_kwargs={"k": 10},
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
@@ -1514,9 +1539,9 @@ async def test_asimilarity_search_with_relevance_scores_with_chunk_transformer(
     result = await vs.asimilarity_search_with_relevance_scores(query="hello", k=2)
     # ----
     assert len(result) == 2
-    assert result[0][0].page_content == "Hello word"
-    assert result[0][0].metadata["id"] == 1
-    assert result[0][1] == 1.0
+    assert result[0][0].page_content == "Hello llm"
+    assert result[0][0].metadata["id"] == 4
+    assert result[0][1] == (1.0 / 3) * 1
     assert result[1][0].page_content == "Hello langchain"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1556,12 +1581,11 @@ def test_similarity_search_with_relevance_scores(mocker: MockerFixture) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="async not implemented yet")
 async def test_asimilarity_search_with_relevance_scores(mocker: MockerFixture) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
     spy_similarity_search_with_relevance_scores = mocker.spy(
-        fake_vs, "similarity_search_with_relevance_scores"
+        fake_vs, "asimilarity_search_with_relevance_scores"
     )
     vs = RAGVectorStore(
         vectorstore=fake_vs,
@@ -1581,8 +1605,8 @@ async def test_asimilarity_search_with_relevance_scores(mocker: MockerFixture) -
     # ----
     assert len(result) == 2
     assert result[0][0].page_content == "Hello"
-    assert result[0][0].metadata["id"] == 1
-    assert result[0][1] == 1.0
+    assert result[0][0].metadata["id"] == 4
+    assert result[0][1] == (1.0 / 3) * 1
     assert result[1][0].page_content == "Hello"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
