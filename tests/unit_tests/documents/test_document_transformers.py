@@ -1,12 +1,14 @@
-from typing import Sequence
+from typing import Any, AsyncIterator, Iterator, Sequence
 
 import pytest
-from langchain.text_splitter import CharacterTextSplitter
 from langchain_core.documents import Document
 
 from langchain_rag.document_transformers.document_transformers import (
     _LEGACY,
     DocumentTransformers,
+)
+from langchain_rag.document_transformers.runnable_document_transformer import (
+    _RunnableGeneratorDocumentTransformer,
 )
 
 from .sample_transformer import (
@@ -19,12 +21,28 @@ def by_pg(doc: Document) -> str:
     return doc.page_content
 
 
+class _SplitWords(_RunnableGeneratorDocumentTransformer):
+    def lazy_transform_documents(
+        self, documents: Iterator[Document], **kwargs: Any
+    ) -> Iterator[Document]:
+        for doc in documents:
+            for text in doc.page_content.split(" "):
+                yield Document(page_content=text, metadata=doc.metadata)
+
+    async def _alazy_transform_documents(  # type: ignore
+        self, documents: AsyncIterator[Document], **kwargs: Any
+    ) -> AsyncIterator[Document]:
+        async for doc in documents:
+            for text in doc.page_content.split(" "):
+                yield Document(page_content=text, metadata=doc.metadata)
+
+
 @pytest.mark.skipif(not _LEGACY, reason="Test only runnable transformer")
 @pytest.mark.parametrize(
     "transformers",
     [
         [
-            CharacterTextSplitter(separator=" ", chunk_size=1, chunk_overlap=0),
+            _SplitWords(),
             UpperLazyTransformer(),
         ]
     ],

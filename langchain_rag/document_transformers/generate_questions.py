@@ -16,7 +16,7 @@ from langchain_core.output_parsers import BaseOutputParser, NumberedListOutputPa
 from langchain_core.prompts import PromptTemplate
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer,
+    _RunnableGeneratorDocumentTransformer,
 )
 
 
@@ -48,7 +48,7 @@ def _get_default_chain_prompt() -> PromptTemplate:
     )
 
 
-class GenerateQuestionsTransformer(RunnableGeneratorDocumentTransformer):
+class GenerateQuestionsTransformer(_RunnableGeneratorDocumentTransformer):
     """Generate questions for each Documents."""
 
     llm_chain: LLMChain

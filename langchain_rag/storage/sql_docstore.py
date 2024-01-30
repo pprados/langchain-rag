@@ -176,10 +176,6 @@ class SQLStore(BaseStore[str, bytes]):
                     for k, v in key_value_pairs
                 ]
             )
-            # TODO:  sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "docstore_pkey" # noqa: E501
-            # DETAIL:  Key (namespace, key)=(postgres/faq-Summarize, fake://SF_187278949112625428) already exists. # noqa: E501
-        # except Exception as e:
-        #     pass  # TODO
 
     def _mdetete(self, keys: Sequence[str], session: Session) -> None:
         with session.begin():

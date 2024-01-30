@@ -4,12 +4,20 @@ from typing import Any, AsyncIterator, Iterator
 # Note: Import directly from langchain_core is not stable and generate some errors
 from langchain_core.documents import Document
 
-from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer,
+from .runnable_document_transformer import (
+    _RunnableGeneratorDocumentTransformer,
 )
 
 
-class CopyDocumentTransformer(RunnableGeneratorDocumentTransformer):
+class CopyDocumentTransformer(_RunnableGeneratorDocumentTransformer):
+    """
+    This class is a transparent transformation. The input is just sent back to
+    the output.
+    This is useful when you want to apply several transformations to a list of
+    documents, and you also want to keep a copy of the original.
+    With a DocumentTransformers, it's possible to do this in LCEL syntax.
+    """
+
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:

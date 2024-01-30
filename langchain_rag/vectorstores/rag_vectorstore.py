@@ -109,11 +109,14 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     chunk_transformer: Optional[BaseDocumentTransformer] = None
     """The transformer to use to create child documents."""
 
-    """The key to use to track the parent id. This will be stored in the
-    metadata of child documents."""
     parent_transformer: Optional[BaseDocumentTransformer] = None
     """The transformer to use to create parent documents.
     If none, then the parent documents will be the raw documents passed in."""
+
+    coef_trunk_k: int = 3
+    """If search_kwargs["k"] is not set, use k * coef_trunk_k to loads trunks
+    candidates.
+    """
 
     def _get_trunk_from_sub_docs(
         self, sub_docs: List[Document], **kwargs: Any
@@ -157,37 +160,29 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         ids = []
         scores: Dict[str, float] = {}
         key = self.chunk_id_key
-        # if self.chunk_transformer:
-        #     key=self.chunk_id_key
-        # else:
-        #     key=self.source_id_key
         for d, s in sub_chunks_and_score:
             if d.metadata[key] not in ids:
-                chunk_id = d.metadata[key]
-                ids.append(chunk_id)
-                chunk_s = scores.get(chunk_id, -1.0)
-                scores[chunk_id] = max(chunk_s, s)
+                id = d.metadata[key]
+                ids.append(id)
+                chunk_s = scores.get(id, 1.0)
+                scores[id] = min(chunk_s, s)
         docs = cast(Sequence[Document], self.docstore.mget(ids))
-        map_ids = {
-            doc.metadata[self.source_id_key]: i for doc, i in zip(docs, ids) if doc
-        }
-        return [
-            (d, scores[map_ids[d.metadata[self.source_id_key]]])
-            for d in docs
-            if d is not None
-        ]
+        map_ids = {doc.metadata[key]: i for doc, i in zip(docs, ids) if doc}
+        return sorted(
+            [(d, scores[map_ids[d.metadata[key]]]) for d in docs if d is not None],
+            key=lambda x: x[1],
+        )
 
     def _get_trunk_from_sub_docs_and_score(
-        self, sub_docs_and_score: List[Tuple[Document, float]], **kwargs: Any
+        self, sub_docs_and_score: List[Tuple[Document, float]], k: int, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         if self.chunk_transformer:
             result = self._update_score_of_chunk(sub_docs_and_score)
         else:
             result = sub_docs_and_score
-        if "k" in kwargs:
-            return result[: cast(int, kwargs["k"])]
-        else:
-            return result
+        if self.search_kwargs.get("k", k) < k:
+            raise ValueError("The search_kwargs['k'] must be >= 'k'")
+        return result[:k]
 
     def as_retriever(
         self, search_type: str = "similarity", search_kwargs: dict = {}, **kwargs: Any
@@ -284,6 +279,8 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 list_of_chunk_ids = chunk_ids_for_doc.get(doc_id, [])
                 list_of_chunk_ids.append(chunk_id)
                 chunk_ids_for_doc[doc_id] = list_of_chunk_ids
+                if self.chunk_id_key not in chunk_document.metadata:
+                    chunk_document.metadata[self.chunk_id_key] = chunk_id
 
         full_chunk_docs = []
         if not self.chunk_transformer:
@@ -294,7 +291,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     Document
                 ] = self.chunk_transformer.transform_documents(
                     [chunk_doc]
-                )  # TOTRY: use multiple documents
+                )  # PPR: use multiple documents?
                 # If in transformed chunk, add the id of the associated chunk
                 for transformed_chunk in all_transformed_chunk:
                     transformed_chunk.metadata[self.chunk_id_key] = chunk_id
@@ -457,6 +454,11 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         _search_kwargs = {**kwargs, **self.search_kwargs}
+
+        trunk_k: Optional[int] = self.search_kwargs.get("k")
+        if not trunk_k:
+            _search_kwargs["k"] = k * self.coef_trunk_k
+
         subdocs_and_score = self.vectorstore.similarity_search_with_score(
             query=query, **_search_kwargs
         )
@@ -604,20 +606,24 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         parent_transformer: Optional[BaseDocumentTransformer] = None,
         **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
-        import pickle
+        from langchain.indexes import SQLRecordManager
 
-        from langchain_rag.indexes import (
-            SQLRecordManager,
-        )
-
-        # FIXME: when the PR will be accepted
-        from ..storage.sql_docstore import SQLStore
-
+        docstore: BaseStore[str, Union[Document, List[str]]]
         if not db_url and not engine:
             raise ValueError("Set db_url or engine")
         if db_url:
             record_manager = SQLRecordManager(namespace=namespace, db_url=db_url)
             record_manager.create_schema()
+            # This implementation is not correct now.
+            # from langchain_community.storage.sql import SQLBaseStore
+            # docstore = SQLBaseStore[Union[Document, List[str]]](
+            #     collection_name=namespace,
+            #     connection_string=db_url,
+            # )
+            import pickle
+
+            from ..storage.sql_docstore import SQLStore
+
             sql_docstore = SQLStore(
                 namespace=namespace,
                 db_url=db_url,
@@ -630,6 +636,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 value_deserializer=pickle.loads,
             )
         else:
+            # Note: the PR https://github.com/langchain-ai/langchain/pull/15909
+            # is not compatible with "engine"
+            import pickle
+
+            from ..storage.sql_docstore import SQLStore
+
             record_manager = SQLRecordManager(
                 namespace=namespace, engine=engine, engine_kwargs=engine_kwargs
             )

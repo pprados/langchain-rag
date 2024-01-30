@@ -23,12 +23,8 @@ from langchain_rag.document_transformers.document_transformers import (
     DocumentTransformers,
 )
 from langchain_rag.vectorstores.rag_vectorstore import RAGVectorStore
-from tests.unit_tests.document_transformers.sample_transformer import (
-    LowerLazyTransformer,
-)
-from tests.unit_tests.document_transformers.test_runnable_transformers import (
-    UpperLazyTransformer,
-)
+
+from .sample_transformer import LowerLazyTransformer, UpperLazyTransformer
 
 VST = TypeVar("VST", bound="VectorStore")
 
@@ -652,19 +648,39 @@ def test_parent_transformer(mocker: MockerFixture) -> None:
                 documents=[
                     Document(
                         page_content="Hello",
-                        metadata={"id": 1, "start_index": 0, "split_id": "1-0"},
+                        metadata={
+                            "id": 1,
+                            "start_index": 0,
+                            "split_id": "1-0",
+                            "_chunk_id": "chunk-01",
+                        },
                     ),
                     Document(
                         page_content="word",
-                        metadata={"id": 1, "start_index": 6, "split_id": "1-6"},
+                        metadata={
+                            "id": 1,
+                            "start_index": 6,
+                            "split_id": "1-6",
+                            "_chunk_id": "chunk-02",
+                        },
                     ),
                     Document(
                         page_content="Happy",
-                        metadata={"id": 2, "start_index": 0, "split_id": "2-0"},
+                        metadata={
+                            "id": 2,
+                            "start_index": 0,
+                            "split_id": "2-0",
+                            "_chunk_id": "chunk-03",
+                        },
                     ),
                     Document(
                         page_content="days",
-                        metadata={"id": 2, "start_index": 6, "split_id": "2-6"},
+                        metadata={
+                            "id": 2,
+                            "start_index": 6,
+                            "split_id": "2-6",
+                            "_chunk_id": "chunk-04",
+                        },
                     ),
                 ],
                 ids=[f"chunk-0{i}" for i in range(1, 5)],
@@ -714,19 +730,39 @@ def test_parent_transformer_ids(mocker: MockerFixture) -> None:
                 documents=[
                     Document(
                         page_content="Hello",
-                        metadata={"id": 1, "start_index": 0, "split_id": "1-0"},
+                        metadata={
+                            "id": 1,
+                            "start_index": 0,
+                            "split_id": "1-0",
+                            "_chunk_id": "chunk-01",
+                        },
                     ),
                     Document(
                         page_content="word",
-                        metadata={"id": 1, "start_index": 6, "split_id": "1-6"},
+                        metadata={
+                            "id": 1,
+                            "start_index": 6,
+                            "split_id": "1-6",
+                            "_chunk_id": "chunk-02",
+                        },
                     ),
                     Document(
                         page_content="Happy",
-                        metadata={"id": 2, "start_index": 0, "split_id": "2-0"},
+                        metadata={
+                            "id": 2,
+                            "start_index": 0,
+                            "split_id": "2-0",
+                            "_chunk_id": "chunk-03",
+                        },
                     ),
                     Document(
                         page_content="days",
-                        metadata={"id": 2, "start_index": 6, "split_id": "2-6"},
+                        metadata={
+                            "id": 2,
+                            "start_index": 6,
+                            "split_id": "2-6",
+                            "_chunk_id": "chunk-04",
+                        },
                     ),
                 ],
                 ids=[f"chunk-0{i}" for i in range(1, 5)],
@@ -1124,7 +1160,7 @@ def test_similarity_search_with_score_with_chunk_transformer(
         parent_transformer=None,
         chunk_transformer=chunk_transformer,
         docstore=docstore,
-        source_id_key="id",
+        chunk_id_key="id",
         search_kwargs={"k": 10},
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
@@ -1136,9 +1172,9 @@ def test_similarity_search_with_score_with_chunk_transformer(
     result = vs.similarity_search_with_score(query="hello", k=2)
     # ----
     assert len(result) == 2
-    assert result[0][0].page_content == "Hello word"
-    assert result[0][0].metadata["id"] == 1
-    assert result[0][1] == 1.0
+    assert result[0][0].page_content == "Hello llm"
+    assert result[0][0].metadata["id"] == 4
+    assert result[0][1] == (1.0 / 3) * 1
     assert result[1][0].page_content == "Hello langchain"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1181,7 +1217,40 @@ async def test_asimilarity_search_with_score_with_chunk_transformer(
     spy_similarity_search_with_score.assert_called_with(query="hello", k=10)
 
 
-def test_similarity_search_with_score(mocker: MockerFixture) -> None:
+def test_similarity_search_with_score_and_coef_trunk_k(mocker: MockerFixture) -> None:
+    fake_vs = FakeVectorStore()
+    docstore = InMemoryStore()
+    spy_similarity_search_with_score = mocker.spy(
+        fake_vs, "similarity_search_with_score"
+    )
+    vs = RAGVectorStore(
+        vectorstore=fake_vs,
+        parent_transformer=parent_transformer,
+        chunk_transformer=chunk_transformer,
+        docstore=docstore,
+        source_id_key="id",
+        coef_trunk_k=2
+        # search_kwargs={"k": 10},
+    )
+    doc1 = Document(page_content="Hello word", metadata={"id": 1})
+    doc2 = Document(page_content="Happy days", metadata={"id": 2})
+    doc3 = Document(page_content="Hello langchain", metadata={"id": 3})
+    doc4 = Document(page_content="Hello llm", metadata={"id": 4})
+    vs.add_documents([doc1, doc2, doc3, doc4])
+    # ----
+    result = vs.similarity_search_with_score(query="hello", k=2)
+    # ----
+    assert len(result) == 2
+    assert result[0][0].page_content == "Hello"
+    assert result[0][0].metadata["id"] == 4
+    assert result[0][1] == (1.0 / 3) * 1
+    assert result[1][0].page_content == "Hello"
+    assert result[1][0].metadata["id"] == 3
+    assert result[1][1] == (1.0 / 3) * 2
+    spy_similarity_search_with_score.assert_called_with(query="hello", k=2 * 2)
+
+
+def test_similarity_search_with_score_and_search_kwargs(mocker: MockerFixture) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
     spy_similarity_search_with_score = mocker.spy(
@@ -1205,8 +1274,8 @@ def test_similarity_search_with_score(mocker: MockerFixture) -> None:
     # ----
     assert len(result) == 2
     assert result[0][0].page_content == "Hello"
-    assert result[0][0].metadata["id"] == 1
-    assert result[0][1] == 1.0
+    assert result[0][0].metadata["id"] == 4
+    assert result[0][1] == (1.0 / 3) * 1
     assert result[1][0].page_content == "Hello"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1397,7 +1466,7 @@ def test_similarity_search_with_relevance_scores_with_chunk_transformer(
         parent_transformer=None,
         chunk_transformer=chunk_transformer,
         docstore=docstore,
-        source_id_key="id",
+        chunk_id_key="id",
         search_kwargs={"k": 10},
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
@@ -1409,9 +1478,9 @@ def test_similarity_search_with_relevance_scores_with_chunk_transformer(
     result = vs.similarity_search_with_relevance_scores(query="hello", k=2)
     # ----
     assert len(result) == 2
-    assert result[0][0].page_content == "Hello word"
-    assert result[0][0].metadata["id"] == 1
-    assert result[0][1] == 1.0
+    assert result[0][0].page_content == "Hello llm"
+    assert result[0][0].metadata["id"] == 4
+    assert result[0][1] == (1.0 / 3) * 1
     assert result[1][0].page_content == "Hello langchain"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1478,8 +1547,8 @@ def test_similarity_search_with_relevance_scores(mocker: MockerFixture) -> None:
     # ----
     assert len(result) == 2
     assert result[0][0].page_content == "Hello"
-    assert result[0][0].metadata["id"] == 1
-    assert result[0][1] == 1.0
+    assert result[0][0].metadata["id"] == 4
+    assert result[0][1] == (1.0 / 3) * 1
     assert result[1][0].page_content == "Hello"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1518,3 +1587,36 @@ async def test_asimilarity_search_with_relevance_scores(mocker: MockerFixture) -
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
     spy_similarity_search_with_relevance_scores.assert_called_with(query="hello", k=10)
+
+
+def test_from_vs_in_memory() -> None:
+    fake_vs = FakeVectorStore()
+    rag_vectorstore, index_params = RAGVectorStore.from_vs_in_memory(
+        vectorstore=fake_vs,
+    )
+    assert index_params["source_id_key"] == "source"
+    assert index_params["vector_store"] == rag_vectorstore
+    from langchain_rag.indexes import MemoryRecordManager
+
+    assert isinstance(index_params["record_manager"], MemoryRecordManager)
+
+
+def test_from_vs_in_sql_with_db_url() -> None:
+    fake_vs = FakeVectorStore()
+    rag_vectorstore, index_params = RAGVectorStore.from_vs_in_sql(
+        vectorstore=fake_vs, db_url="sqlite://", namespace="fake"
+    )
+    assert index_params["source_id_key"] == "source"
+    assert index_params["vector_store"] == rag_vectorstore
+
+
+def test_from_vs_in_sql_with_engine() -> None:
+    from sqlalchemy import create_engine
+
+    fake_vs = FakeVectorStore()
+
+    rag_vectorstore, index_params = RAGVectorStore.from_vs_in_sql(
+        vectorstore=fake_vs, engine=create_engine("sqlite://"), namespace="fake"
+    )
+    assert index_params["source_id_key"] == "source"
+    assert index_params["vector_store"] == rag_vectorstore

@@ -8,7 +8,7 @@ from langchain_core.language_models import BaseLanguageModel
 from langchain_core.prompts import PromptTemplate
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
-    RunnableGeneratorDocumentTransformer,
+    _RunnableGeneratorDocumentTransformer,
 )
 
 
@@ -35,7 +35,7 @@ def _get_default_chain_prompt() -> PromptTemplate:
     )
 
 
-class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
+class SummarizeTransformer(_RunnableGeneratorDocumentTransformer):
     """Generate questions for each Documents."""
 
     llm_chain: LLMChain
@@ -60,13 +60,6 @@ class SummarizeTransformer(RunnableGeneratorDocumentTransformer):
                 page_content="SUMMARY:\n" + str(output).strip(), metadata=metadata
             )
 
-    #
-    # def transform_documents(
-    #         self, documents: Sequence[Document], **kwargs: Any
-    # ) -> Sequence[Document]:
-    #     return list(self.lazy_transform_documents(
-    #     documents=iter(documents), **kwargs))
-    #
     async def _alazy_transform_documents(  # type:ignore
         self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:

@@ -17,9 +17,9 @@ from typing import (
 from langchain_core.documents import BaseDocumentTransformer, Document
 from langchain_core.runnables.base import RunnableParallel, coerce_to_runnable
 
-from .runnable_document_transformer import (
+from langchain_rag.document_transformers.runnable_document_transformer import (
     _LEGACY,
-    RunnableGeneratorDocumentTransformer,
+    _RunnableGeneratorDocumentTransformer,
 )
 
 if sys.version_info.major > 3 or sys.version_info.minor >= 12:
@@ -41,7 +41,7 @@ BATCH_SIZE = 16
 def _transform_documents_generator(
     documents: Iterator[Document],
     *,
-    transformers: Sequence[RunnableGeneratorDocumentTransformer],
+    transformers: Sequence[_RunnableGeneratorDocumentTransformer],
 ) -> Iterator[Document]:
     Input = Union[AsyncIterator[Document], Iterator[Document]]
     steps = {
@@ -68,10 +68,13 @@ async def abatched(iterable: AsyncIterable[T], n: int) -> AsyncIterable[Tuple[T,
         yield tuple(batch)
 
 
-class DocumentTransformers(RunnableGeneratorDocumentTransformer):
-    """Document transformer that uses a list of Transformers.
+class DocumentTransformers(_RunnableGeneratorDocumentTransformer):
+    """
+    Document transformer that uses a list of Transformers.
     Take each input document, and apply all transformations present in the
     `transformers` attribute.
+
+    This is the basis for multiple transformations, using the plus operator.
     """
 
     class Config:
@@ -80,14 +83,12 @@ class DocumentTransformers(RunnableGeneratorDocumentTransformer):
     if _LEGACY:
         transformers: Sequence[BaseDocumentTransformer]
     else:
-        transformers: Sequence[  # type: ignore[no-redef]
-            RunnableGeneratorDocumentTransformer
-        ]
+        transformers: Sequence[_RunnableGeneratorDocumentTransformer]  # type: ignore[no-redef]
     """List of document transformer that are applied in parallel."""
 
     def __add__(
         self,
-        other: RunnableGeneratorDocumentTransformer,
+        other: _RunnableGeneratorDocumentTransformer,
     ) -> "DocumentTransformers":
         """Compose this runnable with another object to create a RunnableSequence."""
         if isinstance(other, DocumentTransformers):

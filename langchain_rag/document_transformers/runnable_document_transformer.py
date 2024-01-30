@@ -32,13 +32,13 @@ _LEGACY = True  # Use legacy langchain transformer interface
     We propose an alternative way of making transformers compatible with LCEL.
     The first keeps the current protocol (RunnableDocumentTransformer).
     The second takes advantage of this to propose
-    a lazy approach to transformations (RunnableGeneratorDocumentTransformer).
+    a lazy approach to transformations (_RunnableGeneratorDocumentTransformer).
     It's better for the memory, pipeline, etc.
-    
+
     Now, it's possible to create a pipeline of transformer like:
     Example:
     ..code - block:: python
-    class UpperTransformer(RunnableGeneratorDocumentTransformer):
+    class UpperTransformer(_RunnableGeneratorDocumentTransformer):
         def lazy_transform_documents(
                 self,
                 documents: Iterator[Document],
@@ -111,80 +111,7 @@ Input = Union[AsyncIterator[Document], Iterator[Document], Sequence[Document]]
 Output = Union[AsyncIterator[Document], Iterator[Document]]
 
 
-class RunnableGeneratorDocumentTransformer(
-    Runnable[
-        Input,
-        Output,
-    ],
-    BaseDocumentTransformer,
-    BaseModel,  # Pydantic v2
-    ABC,
-):
-    """
-    Runnable Document Transformer with lazy transformation.
-
-    You can compose a list of transformations with the *or* operator.
-
-        .. code-block:: python
-
-            runnable=TokenTextSplitter(...) | CharacterTextSplitter(...)
-            docs = list(runnable.invoke(input_docs))
-
-    To apply multiple transformations with the same input, use the *plus* operator.
-
-        .. code-block:: python
-
-            runnable=TokenTextSplitter(...) + CharacterTextSplitter(...)
-            docs = list(runnable.invoke(input_docs))
-
-    and, you can combine these two operator
-
-
-        .. code-block:: python
-
-            runnable=(
-                (TokenTextSplitter(...) | CharacterTextSplitter(...) ) +
-                CharacterTextSplitter(...))
-            docs = list(runnable.invoke(input_docs))
-
-    > This class is a transition class for proposing lazy transformers,
-    > compatible with LCEL.
-    > Later, it can be integrated into BaseDocumentTransformer
-    >if you agree to add a lazy approach to transformations.
-    >All subclass of BaseDocumentTransformer must be updated to be compatible with this.
-    """
-
-    def __add__(
-        self,
-        other: "RunnableGeneratorDocumentTransformer",
-    ) -> "DocumentTransformers":
-        """Compose this runnable with another object to create a RunnableSequence."""
-        # return RunnableSequence(first=self, last=coerce_to_runnable(other))
-        from .document_transformers import DocumentTransformers
-
-        if isinstance(other, DocumentTransformers):
-            return DocumentTransformers(
-                transformers=list(other.transformers) + [self],
-            )
-        else:
-            if _LEGACY:
-                return DocumentTransformers(transformers=[self, other])
-            else:
-                return DocumentTransformers(
-                    transformers=[
-                        self,
-                        cast(BaseDocumentTransformer, coerce_to_runnable(other)),
-                    ]
-                )
-
-    if _LEGACY:
-
-        def __radd__(
-            self,
-            other: DocumentTransformers,
-        ) -> "RunnableGeneratorDocumentTransformer":
-            return self.__add__(other)
-
+class LazyDocumentTransformer(BaseDocumentTransformer):
     def transform_documents(
         self, documents: Sequence[Document], **kwargs: Any
     ) -> Sequence[Document]:
@@ -242,6 +169,86 @@ class RunnableGeneratorDocumentTransformer(
 
         async for doc in self._alazy_transform_documents(async_documents):
             yield doc
+
+
+class _RunnableGeneratorDocumentTransformer(
+    Runnable[
+        Input,
+        Output,
+    ],
+    LazyDocumentTransformer,
+    BaseModel,  # Pydantic v2
+    ABC,
+):
+    # This class has a new LCEL-compatible BaseDocumentTransformer proposal.
+    # It is intended to replace it once all the impacts have been processed.
+    """
+    Runnable Document Transformer with lazy transformation.
+
+    You can compose a list of transformations with the *or* operator.
+
+        .. code-block:: python
+
+            runnable=TokenTextSplitter(...) | CharacterTextSplitter(...)
+            docs = list(runnable.invoke(input_docs))
+
+    To apply multiple transformations with the same input, use the *plus* operator.
+
+        .. code-block:: python
+
+            runnable=TokenTextSplitter(...) + CharacterTextSplitter(...)
+            docs = list(runnable.invoke(input_docs))
+
+    and, you can combine these two operator
+
+
+        .. code-block:: python
+
+            runnable=(
+                (TokenTextSplitter(...) | CharacterTextSplitter(...) ) +
+                CharacterTextSplitter(...))
+            docs = list(runnable.invoke(input_docs))
+
+    > This class is a transition class for proposing lazy transformers,
+    > compatible with LCEL.
+    > Later, it can be integrated into BaseDocumentTransformer
+    >if you agree to add a lazy approach to transformations.
+    >All subclass of BaseDocumentTransformer must be updated to be compatible with this.
+    """
+
+    def __add__(
+        self,
+        other: "_RunnableGeneratorDocumentTransformer",
+    ) -> "DocumentTransformers":
+        """
+        Compose this runnable with another object to create a
+        RunnableTransformers, with several transformations applied to the
+        same documents .
+        """
+        from .document_transformers import DocumentTransformers
+
+        if isinstance(other, DocumentTransformers):
+            return DocumentTransformers(
+                transformers=list(other.transformers) + [self],
+            )
+        else:
+            if _LEGACY:
+                return DocumentTransformers(transformers=[self, other])
+            else:
+                return DocumentTransformers(
+                    transformers=[
+                        self,
+                        cast(BaseDocumentTransformer, coerce_to_runnable(other)),
+                    ]
+                )
+
+    if _LEGACY:
+
+        def __radd__(
+            self,
+            other: "DocumentTransformers",
+        ) -> "_RunnableGeneratorDocumentTransformer":
+            return self.__add__(other)
 
     def invoke(
         self,

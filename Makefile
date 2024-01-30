@@ -10,10 +10,7 @@ TEST_FILE ?= tests/unit_tests/
 integration_tests:
 	poetry run pytest tests/integration_tests
 
-test:
-	poetry run pytest -v $(TEST_FILE)
-
-tests: 
+test tests:
 	poetry run pytest -v $(TEST_FILE)
 
 test_watch:
@@ -135,11 +132,11 @@ else
 endif
 
 LANGCHAIN_HOME=../langchain
-TARGET:=langchain
+TARGET:=core
 SRC_PACKAGE=langchain_rag
-DST_PACKAGE=langchain
+DST_PACKAGE=langchain_core
 SRC_MODULE:=langchain-rag
-DST_MODULE:=langchain
+DST_MODULE:=core
 
 define _push_sync
 	@$(eval TARGET=$(TARGET))
@@ -174,6 +171,7 @@ define _push_sync
 	@find '${WORK_DIR}' -type f -a \
 		-exec sed -i "s/${SRC_PACKAGE}/${DST_PACKAGE}/g" {} ';' \
 		-exec sed -i "s/pip install -q '$(SRC_MODULE)'/pip install -q '$(DST_MODULE)'/g" {} ';'
+	#@echo "${WORK_DIR}/libs"
 	@cp -R "${WORK_DIR}/libs" "${WORK_DIR}/docs" $(LANGCHAIN_HOME)/
 	@rm -Rf '${WORK_DIR}'
 endef
@@ -181,31 +179,39 @@ endef
 push-sync:
 	$(call _push_sync)
 
-pull-sync:
-	cp -rf $(TARGET)/langchain_experimental/chains/qa_with_references/ \
-		langchain_qa_with_references/chains/
-	cp -f $(TARGET)/langchain_experimental/chains/__init__.py \
-		langchain_qa_with_references/chains/
-	cp -rf $(TARGET)/langchain_experimental/chains/qa_with_references_and_verbatims/ \
-		langchain_qa_with_references/chains/
-	cp -rf $(TARGET)/tests/unit_tests/chains/ \
-		tests/unit_tests/
-	cp $(TARGET)/docs/qa_with_reference*.ipynb .
-	find . -type f \( -name '*.py' -or -name '*.ipynb' \) | xargs sed -i 's/langchain_experimental/langchain_qa_with_references/g'
-	find . -type f -name '*.ipynb' | xargs sed -i 's/langchain\([_-]\)experimental/langchain\1qa_with_references/g'
+#pull-sync:
+#	cp -rf $(TARGET)/langchain_experimental/chains/qa_with_references/ \
+#		langchain_qa_with_references/chains/
+#	cp -f $(TARGET)/langchain_experimental/chains/__init__.py \
+#		langchain_qa_with_references/chains/
+#	cp -rf $(TARGET)/langchain_experimental/chains/qa_with_references_and_verbatims/ \
+#		langchain_qa_with_references/chains/
+#	cp -rf $(TARGET)/tests/unit_tests/chains/ \
+#		tests/unit_tests/
+#	cp $(TARGET)/docs/qa_with_reference*.ipynb .
+#	find . -type f \( -name '*.py' -or -name '*.ipynb' \) | xargs sed -i 's/langchain_experimental/langchain_qa_with_references/g'
+#	find . -type f -name '*.ipynb' | xargs sed -i 's/langchain\([_-]\)experimental/langchain\1qa_with_references/g'
 
 
 poetry.lock: pyproject.toml
 	poetry lock
 	git add poetry.lock
-	poetry install --with dev,lint,test,codespell
+	poetry install --sync --with dev,lint,test,codespell
 
 
 ## Refresh lock
 lock: poetry.lock
+
+## Start jupyter
+jupyter:
+	poetry run jupyter lab
+
+demo.py: docs/integrations/vectorstores/rag_vectorstore.ipynb
+	jupyter nbconvert --to python $< --output $(PWD)/$@
 
 ## Validate the code
 validate: poetry.lock format lint spell_check test
 
 ## Validate the code
 validate: format lint spell_check test
+
