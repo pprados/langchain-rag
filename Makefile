@@ -120,7 +120,7 @@ endif
 # SNIPPET pour publier la version sur pypi.org.
 .PHONY: release
 ## Publish distribution on pypi.org
-release: integration_tests clean dist
+release: validate integration_tests clean dist
 ifeq ($(OFFLINE),True)
 	@echo -e "$(red)Can not release in offline mode$(normal)"
 else
