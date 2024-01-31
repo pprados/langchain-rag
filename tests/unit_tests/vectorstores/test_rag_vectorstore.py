@@ -23,6 +23,7 @@ from langchain_rag.document_transformers.document_transformers import (
     DocumentTransformers,
 )
 from langchain_rag.vectorstores.rag_vectorstore import RAGVectorStore
+
 from .sample_transformer import LowerLazyTransformer, UpperLazyTransformer
 
 VST = TypeVar("VST", bound="VectorStore")
@@ -39,7 +40,7 @@ class FakeUUID:
 
 
 def _must_be_called(
-        must_be_called: List[Tuple[List[str], List[Dict[str, Any]]]]
+    must_be_called: List[Tuple[List[str], List[Dict[str, Any]]]]
 ) -> List[Any]:
     calls = []
     for page_contents, metadatas in must_be_called:
@@ -76,28 +77,28 @@ class FakeVectorStore(VectorStore):
         return uuids
 
     async def aadd_documents(
-            self, documents: List[Document], **kwargs: Any
+        self, documents: List[Document], **kwargs: Any
     ) -> List[str]:
         return self.add_documents(documents, **kwargs)
 
     def add_texts(
-            self,
-            texts: Iterable[str],
-            metadatas: Optional[List[dict]] = None,
-            **kwargs: Any,
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        **kwargs: Any,
     ) -> List[str]:
         return [str(self.uuid()) for _ in texts]
 
     async def aadd_texts(
-            self,
-            texts: Iterable[str],
-            metadatas: Optional[List[dict]] = None,
-            **kwargs: Any,
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        **kwargs: Any,
     ) -> List[str]:
         return self.add_texts(texts, metadatas, **kwargs)
 
     def similarity_search(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
         result = {}  # Identity set
         for word in query.split(" "):
@@ -108,12 +109,12 @@ class FakeVectorStore(VectorStore):
         return list(result.values())
 
     async def asimilarity_search(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
         return self.similarity_search(query=query, k=k, **kwargs)
 
     def similarity_search_with_score(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         docs = self.similarity_search(query=query, k=k)
         len_docs = len(docs)
@@ -121,12 +122,12 @@ class FakeVectorStore(VectorStore):
         return [(doc, (len_docs - i) * c) for i, doc in enumerate(docs)]
 
     async def asimilarity_search_with_score(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         return self.similarity_search_with_score(query=query, k=k, **kwargs)
 
     def similarity_search_with_relevance_scores(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         docs = self.similarity_search(query=query, k=k)
         len_docs = len(docs)
@@ -134,17 +135,17 @@ class FakeVectorStore(VectorStore):
         return [(doc, (len_docs - i) * c) for i, doc in enumerate(docs)]
 
     async def asimilarity_search_with_relevance_scores(
-            self, query: str, k: int = 4, **kwargs: Any
+        self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         return self.similarity_search_with_relevance_scores(query=query, k=k, **kwargs)
 
     @classmethod
     def from_texts(
-            cls: Type[VST],
-            texts: List[str],
-            embedding: Embeddings,
-            metadatas: Optional[List[dict]] = None,
-            **kwargs: Any,
+        cls: Type[VST],
+        texts: List[str],
+        embedding: Embeddings,
+        metadatas: Optional[List[dict]] = None,
+        **kwargs: Any,
     ) -> VST:
         store = cls()
         return store
@@ -153,7 +154,7 @@ class FakeVectorStore(VectorStore):
         return True
 
     async def adelete(
-            self, ids: Optional[List[str]] = None, **kwargs: Any
+        self, ids: Optional[List[str]] = None, **kwargs: Any
     ) -> Optional[bool]:
         return True
 
@@ -656,8 +657,9 @@ def test_parent_transformer(mocker: MockerFixture) -> None:
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     # ----
     ids = vs.add_documents(documents=[doc1, doc2])
-    result = (vs.as_retriever(search_kwargs={"k": 20})
-              .get_relevant_documents(doc1.page_content))
+    result = vs.as_retriever(search_kwargs={"k": 20}).get_relevant_documents(
+        doc1.page_content
+    )
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
@@ -1012,7 +1014,7 @@ def test_similarity_search_without_parent_transformer(mocker: MockerFixture) -> 
 
 @pytest.mark.asyncio
 async def test_asimilarity_search_without_parent_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1044,7 +1046,7 @@ async def test_asimilarity_search_without_parent_transformer(
 
 # %% similarity_search_with_score
 def test_similarity_search_with_score_without_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1079,7 +1081,7 @@ def test_similarity_search_with_score_without_transformer(
 
 @pytest.mark.asyncio
 async def test_asimilarity_search_with_score_without_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1113,7 +1115,7 @@ async def test_asimilarity_search_with_score_without_transformer(
 
 
 def test_similarity_search_with_score_with_parent_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1146,7 +1148,7 @@ def test_similarity_search_with_score_with_parent_transformer(
 
 @pytest.mark.asyncio
 async def test_asimilarity_search_with_score_with_parent_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1178,7 +1180,7 @@ async def test_asimilarity_search_with_score_with_parent_transformer(
 
 
 def test_similarity_search_with_score_with_chunk_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1213,7 +1215,7 @@ def test_similarity_search_with_score_with_chunk_transformer(
 
 @pytest.mark.asyncio
 async def test_asimilarity_search_with_score_with_chunk_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1346,7 +1348,7 @@ async def test_asimilarity_search_with_score(mocker: MockerFixture) -> None:
 
 # %% similarity_search_with_relevance_scores
 def test_similarity_search_with_relevance_scores_without_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1381,7 +1383,7 @@ def test_similarity_search_with_relevance_scores_without_transformer(
 
 @pytest.mark.asyncio
 async def test_asimilarity_search_with_relevance_scores_without_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1415,7 +1417,7 @@ async def test_asimilarity_search_with_relevance_scores_without_transformer(
 
 
 def test_similarity_search_with_relevance_scores_with_parent_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1448,7 +1450,7 @@ def test_similarity_search_with_relevance_scores_with_parent_transformer(
 
 @pytest.mark.asyncio
 async def test_asimilarity_search_with_relevance_scores_with_parent_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1480,7 +1482,7 @@ async def test_asimilarity_search_with_relevance_scores_with_parent_transformer(
 
 
 def test_similarity_search_with_relevance_scores_with_chunk_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()
@@ -1515,7 +1517,7 @@ def test_similarity_search_with_relevance_scores_with_chunk_transformer(
 
 @pytest.mark.asyncio
 async def test_asimilarity_search_with_relevance_scores_with_chunk_transformer(
-        mocker: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     fake_vs = FakeVectorStore()
     docstore = InMemoryStore()

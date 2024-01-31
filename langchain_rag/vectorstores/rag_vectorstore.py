@@ -172,9 +172,8 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     ) -> VectorStoreRetriever:
         if not self.chunk_transformer:
             return self.vectorstore.as_retriever(
-                search_type=search_type,
-                search_kwargs=search_kwargs,
-                *kwargs)
+                search_type=search_type, search_kwargs=search_kwargs, *kwargs
+            )
 
         retriever = VectorStoreRetriever(
             vectorstore=self, search_type=search_type, search_kwargs=search_kwargs
@@ -219,9 +218,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     # Some docstore refuse some characters in the id.
                     # We convert the id to hash
                     doc_id = doc.metadata[self.source_id_key]
-                    hash_id = hashlib.sha256(
-                        str(doc_id).encode("utf-8")
-                    ).hexdigest()
+                    hash_id = hashlib.sha256(str(doc_id).encode("utf-8")).hexdigest()
                     ids.append(hash_id)
                     map_doc_ids[doc_id] = hash_id
             self.delete(ids=list(map_doc_ids.values()))

@@ -51,7 +51,8 @@ spell_fix:
 ######################
 
 clean: docs_clean api_docs_clean
-
+	@rm -Rf dist/ .make-* .mypy_cache .pytest_cache .ruff_cache
+	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \;
 
 docs_build:
 	docs/.local_build.sh
