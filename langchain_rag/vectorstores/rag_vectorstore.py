@@ -171,7 +171,10 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         self, search_type: str = "similarity", search_kwargs: dict = {}, **kwargs: Any
     ) -> VectorStoreRetriever:
         if not self.chunk_transformer:
-            return self.vectorstore.as_retriever(**kwargs)
+            return self.vectorstore.as_retriever(
+                search_type=search_type,
+                search_kwargs=search_kwargs,
+                *kwargs)
 
         retriever = VectorStoreRetriever(
             vectorstore=self, search_type=search_type, search_kwargs=search_kwargs
@@ -209,19 +212,18 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     map_doc_ids[doc.metadata[self.source_id_key]] = id
 
             else:
+                ids = []
                 for doc in documents:
                     if self.source_id_key not in doc.metadata:
                         raise ValueError("Each document must have a uniq id.")
-                    ids = []
-                    for doc in documents:
-                        # Some docstore refuse some characters in the id.
-                        # We convert the id to hash
-                        doc_id = doc.metadata[self.source_id_key]
-                        hash_id = hashlib.sha256(
-                            str(doc_id).encode("utf-8")
-                        ).hexdigest()
-                        ids.append(hash_id)
-                        map_doc_ids[doc_id] = hash_id
+                    # Some docstore refuse some characters in the id.
+                    # We convert the id to hash
+                    doc_id = doc.metadata[self.source_id_key]
+                    hash_id = hashlib.sha256(
+                        str(doc_id).encode("utf-8")
+                    ).hexdigest()
+                    ids.append(hash_id)
+                    map_doc_ids[doc_id] = hash_id
             self.delete(ids=list(map_doc_ids.values()))
         else:
             chunk_ids = ids

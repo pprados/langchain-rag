@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/../langchain-googledrive/.idea/exlangchain.iml" filepath="$PROJECT_DIR$/../langchain-googledrive/.idea/exlangchain.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/langchain-rag.iml" filepath="$PROJECT_DIR$/.idea/langchain-rag.iml" />
     </modules>
   </component>

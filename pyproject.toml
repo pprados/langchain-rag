@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "langchain-rag"
-version = "0.1.10"
+version = "0.1.17"
 description = "This is a temporary project while I wait for my langchain [pull-request](https://github.com/langchain-ai/langchain/pull/7278) to be validated."
 authors = ["Philippe PRADOS"]
 license = "Apache 2.0"
@@ -10,30 +10,24 @@ packages = [{ include = "langchain_rag" }]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
-langchain-core = "^0.1.10"
-#langchain-community = "^0.1.15"
-langchain = "^0.1.2"
+langchain-core = "^0.1.17"
+langchain-community = "^0.0.16"
+langchain = "^0.1.4"
 #langchain-core = { path = "../langchain/libs/core", develop = true }
-langchain-community = { path = "../langchain/libs/community", develop = true }
+#langchain-community = { path = "../langchain/libs/community", develop = true }
 #langchain = { path = "../langchain/libs/langchain", develop = true }
-jupyter = "^1.0.0"
 
 
 [tool.poetry.group.dev]
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-
 playwright = "^1.28.0"
 setuptools = "^67.6.1"
 ipython = "*"
 ipykernel = "*"
-#notebook = "^6.0.0"
 jupyter = "^1.0"
-jupyterlab_rise = "*"
-
-lark = "^1.1"
-langchain_openai = "^0.0.2"
+jupyterlab_rise = "^0.42"
 
 [tool.poetry.group.test.dependencies]
 # The only dependencies that should be added are
@@ -54,17 +48,18 @@ chromadb = "^0.4.10"
 aiosqlite = "*"
 pgvector = "*"
 psycopg2-binary = "*"
+langchain_openai = "^0.0.2"
 #langchain-qa_with_references = { path = "../langchain-qa_with_references", develop = true }
 langchain-qa_with_references = "^0.0.330"
 faiss-cpu = {version = "^1"}
-langchain-openai = "*"
+lark = "^1.1"
 
 [tool.poetry.group.lint]
 optional = true
 
 [tool.poetry.group.lint.dependencies]
-#mypy = "^0.991"
-mypy = { git = "https://github.com/python/mypy.git", branch = "master" }
+mypy = "^1.8"
+#mypy = { git = "https://github.com/python/mypy.git", branch = "master" }
 ruff = "^0.1.9"
 types-toml = "^0.10.8.1"
 types-redis = "^4.3.21.6"

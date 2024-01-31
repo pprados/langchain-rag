@@ -7,7 +7,11 @@ all: help
 # Define a variable for the test file path.
 TEST_FILE ?= tests/unit_tests/
 
-integration_tests:
+.make-rag_vectorstore.ipynb: docs/integrations/vectorstores/rag_vectorstore.ipynb
+	@jupyter execute $<
+	@touch .make-rag_vectorstore.ipynb
+
+integration_tests:.make-rag_vectorstore.ipynb
 	poetry run pytest tests/integration_tests
 
 test tests:
@@ -116,7 +120,7 @@ endif
 # SNIPPET pour publier la version sur pypi.org.
 .PHONY: release
 ## Publish distribution on pypi.org
-release: clean dist
+release: integration_tests clean dist
 ifeq ($(OFFLINE),True)
 	@echo -e "$(red)Can not release in offline mode$(normal)"
 else
