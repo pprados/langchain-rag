@@ -2,6 +2,7 @@ import hashlib
 import uuid
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     Optional,
@@ -30,6 +31,23 @@ from .wrapper_vectorstore import WrapperVectorStore
 
 # %%
 VST = TypeVar("VST", bound="VectorStore")
+
+
+def _get_source_id_assigner(
+    source_id_key: Union[str, Callable[[Document], str], None],
+) -> Callable[[Document], Union[str, None]]:
+    """Get the source id from the document."""
+    if source_id_key is None:
+        return lambda doc: None
+    elif isinstance(source_id_key, str):
+        return lambda doc: doc.metadata[source_id_key]
+    elif callable(source_id_key):
+        return source_id_key
+    else:
+        raise ValueError(
+            f"source_id_key should be either None, a string or a callable. "
+            f"Got {source_id_key} of type {type(source_id_key)}."
+        )
 
 
 class RAGVectorStore(BaseModel, WrapperVectorStore):
@@ -90,7 +108,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     docstore: BaseStore[str, Union[Document, List[str]]]
     """The storage layer for the parent documents"""
 
-    source_id_key: str = "source"
+    source_id_key: Union[str, Callable[[Document], str], None] = "source"
     """The metadata to identify the id of the parents """
 
     chunk_id_key: str = "_chunk_id"
@@ -197,6 +215,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 to the docstore. If not provided, random UUIDs will be used as
                 ids.
         """
+        source_id_key_get = _get_source_id_assigner(self.source_id_key)
         chunk_ids = None
         map_doc_ids: Dict[Any, str] = {}
         if self.parent_transformer:
@@ -208,16 +227,14 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     )
 
                 for id, doc in zip(ids, documents):
-                    map_doc_ids[doc.metadata[self.source_id_key]] = id
+                    map_doc_ids[source_id_key_get(doc)] = id
 
             else:
                 ids = []
                 for doc in documents:
-                    if self.source_id_key not in doc.metadata:
-                        raise ValueError("Each document must have a uniq id.")
                     # Some docstore refuse some characters in the id.
                     # We convert the id to hash
-                    doc_id = doc.metadata[self.source_id_key]
+                    doc_id = source_id_key_get(doc)
                     hash_id = hashlib.sha256(str(doc_id).encode("utf-8")).hexdigest()
                     ids.append(hash_id)
                     map_doc_ids[doc_id] = hash_id
@@ -257,7 +274,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         if self.parent_transformer:
             # Associate each chunk with the parent
             for chunk_id, chunk_document in zip(chunk_ids, chunk_documents):
-                doc_id = map_doc_ids[chunk_document.metadata[self.source_id_key]]
+                doc_id = map_doc_ids[source_id_key_get(chunk_document)]
                 list_of_chunk_ids = chunk_ids_for_doc.get(doc_id, [])
                 list_of_chunk_ids.append(chunk_id)
                 chunk_ids_for_doc[doc_id] = list_of_chunk_ids
@@ -326,6 +343,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 to the docstore. If not provided, random UUIDs will be used as
                 ids.
         """
+        source_id_key_get = _get_source_id_assigner(self.source_id_key)
         chunk_ids = None
         map_doc_ids: Dict[Any, str] = {}
         if self.parent_transformer:
@@ -337,17 +355,15 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     )
 
                 for id, doc in zip(ids, documents):
-                    map_doc_ids[doc.metadata[self.source_id_key]] = id
+                    map_doc_ids[source_id_key_get(doc)] = id
 
             else:
                 for doc in documents:
-                    if self.source_id_key not in doc.metadata:
-                        raise ValueError("Each document must have a uniq id.")
                     ids = []
                     for doc in documents:
                         # Some docstore refuse some characters in the id.
                         # We convert the id to hash
-                        doc_id = doc.metadata[self.source_id_key]
+                        doc_id = source_id_key_get(doc)
                         hash_id = hashlib.sha256(
                             str(doc_id).encode("utf-8")
                         ).hexdigest()
@@ -391,7 +407,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         if self.parent_transformer:
             # Associate each chunk with the parent
             for chunk_id, chunk_document in zip(chunk_ids, chunk_documents):
-                doc_id = map_doc_ids[chunk_document.metadata[self.source_id_key]]
+                doc_id = map_doc_ids[source_id_key_get(chunk_document)]
                 list_of_chunk_ids = chunk_ids_for_doc.get(doc_id, [])
                 list_of_chunk_ids.append(chunk_id)
                 chunk_ids_for_doc[doc_id] = list_of_chunk_ids
@@ -692,7 +708,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         *,
         chunk_transformer: Optional[BaseDocumentTransformer] = None,
         parent_transformer: Optional[BaseDocumentTransformer] = None,
-        source_id_key: str = "source",
+        source_id_key: Union[str, Callable[[Document], str]] = "source",
         **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.storage import InMemoryStore

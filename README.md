@@ -1,4 +1,9 @@
-> a [pull-request](https://github.com/langchain-ai/langchain/pull/13910) with this code was proposed to langchain.
+Langchain-RAG
+=============
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/pprados/langchain-rag?quickstart=1)
+
+> Note: A [pull-request](https://github.com/langchain-ai/langchain/pull/13910) with this code was proposed to langchain.
 
 When splitting documents for retrieval, there are often conflicting desires:
 
