@@ -124,3 +124,7 @@ markers = [
 asyncio_mode = "auto"
 
 
+
+[tool.poetry-git-version-plugin]
+make_alpha_version = true
+alpha_version_format = '{version}a{distance}+{commit_hash}'

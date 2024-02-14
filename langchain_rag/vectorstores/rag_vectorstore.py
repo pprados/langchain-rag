@@ -227,7 +227,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                     )
 
                 for id, doc in zip(ids, documents):
-                    map_doc_ids[source_id_key_get(doc)] = id
+                    key=source_id_key_get(doc)
+                    if key in map_doc_ids:
+                        raise ValueError(
+                            f"Got multiple documents with the same ids `{key}"
+                        )
+                    map_doc_ids[key] = id
 
             else:
                 ids = []
