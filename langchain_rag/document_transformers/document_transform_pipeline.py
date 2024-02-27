@@ -42,10 +42,10 @@ class DocumentTransformerPipeline(_RunnableGeneratorDocumentTransformer):
         if not self.transformers:
             return iter(documents)
         for _transformer in self.transformers:
-            iter_documents = self._lazy_transform_documents_with_transformer(
+            documents = self._lazy_transform_documents_with_transformer(
                 documents, transformer=_transformer
             )
-        return iter_documents
+        return documents
 
     async def _alazy_transform_documents_with_transformer(
         self,

@@ -1,5 +1,7 @@
 SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
+POETRY_EXTRA?=--all-extras
+POETRY_WITH?=dev,lint,test,codespell
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -51,8 +53,8 @@ spell_fix:
 ######################
 
 clean: docs_clean api_docs_clean
-	@rm -Rf dist/ .make-* .mypy_cache .pytest_cache .ruff_cache
 	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \;
+	@rm -Rf dist/ .make-* .mypy_cache .pytest_cache .ruff_cache
 
 docs_build:
 	docs/.local_build.sh
@@ -201,7 +203,7 @@ push-sync:
 poetry.lock: pyproject.toml
 	poetry lock
 	git add poetry.lock
-	poetry install --sync --with dev,lint,test,codespell
+	poetry install $(POETRY_EXTRA) --with $(POETRY_WITH)
 
 
 ## Refresh lock
@@ -217,8 +219,6 @@ demo.py: docs/integrations/vectorstores/rag_vectorstore.ipynb
 ## Validate the code
 validate: poetry.lock format lint spell_check test
 
-## Validate the code
-validate: format lint spell_check test
 
 init: poetry.lock
 	@poetry self update

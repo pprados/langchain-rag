@@ -1,0 +1,16 @@
+repos:
+-   repo: local
+    hooks:
+    -   id: make-validate
+        # See https://github.com/pre-commit/pre-commit-hooks
+        name: validate pre-commit
+        description: Run the `make validate` command from Makefile
+#        entry: 'make ci_validate'
+        entry: bash
+        args: [".pre-commit.sh"]
+#        args: ['--pattern', '^(?master.*)']
+        #args: ['--branch', 'master']
+        verbose: true
+        language: system
+        always_run: true
+        fail_fast: true
