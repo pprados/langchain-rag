@@ -1204,9 +1204,9 @@ def test_similarity_search_with_score_with_chunk_transformer(
     result = vs.similarity_search_with_score(query="hello", k=2)
     # ----
     assert len(result) == 2
-    assert result[0][0].page_content == "Hello llm"
-    assert result[0][0].metadata["id"] == 4
-    assert result[0][1] == (1.0 / 3) * 1
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == (1.0 / 3) * 3
     assert result[1][0].page_content == "Hello langchain"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1239,9 +1239,9 @@ async def test_asimilarity_search_with_score_with_chunk_transformer(
     result = await vs.asimilarity_search_with_score(query="hello", k=2)
     # ----
     assert len(result) == 2
-    assert result[0][0].page_content == "Hello llm"
-    assert result[0][0].metadata["id"] == 4
-    assert result[0][1] == (1.0 / 3) * 1
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == (1.0 / 3) * 3
     assert result[1][0].page_content == "Hello langchain"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1273,8 +1273,8 @@ def test_similarity_search_with_score_and_coef_trunk_k(mocker: MockerFixture) ->
     # ----
     assert len(result) == 2
     assert result[0][0].page_content == "Hello"
-    assert result[0][0].metadata["id"] == 4
-    assert result[0][1] == (1.0 / 3) * 1
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == (1.0 / 3) * 3
     assert result[1][0].page_content == "Hello"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1305,8 +1305,8 @@ def test_similarity_search_with_score_and_search_kwargs(mocker: MockerFixture) -
     # ----
     assert len(result) == 2
     assert result[0][0].page_content == "Hello"
-    assert result[0][0].metadata["id"] == 4
-    assert result[0][1] == (1.0 / 3) * 1
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == (1.0 / 3) * 3
     assert result[1][0].page_content == "Hello"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1338,8 +1338,8 @@ async def test_asimilarity_search_with_score(mocker: MockerFixture) -> None:
     # ----
     assert len(result) == 2
     assert result[0][0].page_content == "Hello"
-    assert result[0][0].metadata["id"] == 4
-    assert result[0][1] == (1.0 / 3) * 1
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == (1.0 / 3) * 3
     assert result[1][0].page_content == "Hello"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1506,9 +1506,9 @@ def test_similarity_search_with_relevance_scores_with_chunk_transformer(
     result = vs.similarity_search_with_relevance_scores(query="hello", k=2)
     # ----
     assert len(result) == 2
-    assert result[0][0].page_content == "Hello llm"
-    assert result[0][0].metadata["id"] == 4
-    assert result[0][1] == (1.0 / 3) * 1
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == (1.0 / 3) * 3
     assert result[1][0].page_content == "Hello langchain"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1541,9 +1541,9 @@ async def test_asimilarity_search_with_relevance_scores_with_chunk_transformer(
     result = await vs.asimilarity_search_with_relevance_scores(query="hello", k=2)
     # ----
     assert len(result) == 2
-    assert result[0][0].page_content == "Hello llm"
-    assert result[0][0].metadata["id"] == 4
-    assert result[0][1] == (1.0 / 3) * 1
+    assert result[0][0].page_content == "Hello word"
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == (1.0 / 3) * 3
     assert result[1][0].page_content == "Hello langchain"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1574,8 +1574,8 @@ def test_similarity_search_with_relevance_scores(mocker: MockerFixture) -> None:
     # ----
     assert len(result) == 2
     assert result[0][0].page_content == "Hello"
-    assert result[0][0].metadata["id"] == 4
-    assert result[0][1] == (1.0 / 3) * 1
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == (1.0 / 3) * 3
     assert result[1][0].page_content == "Hello"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2
@@ -1607,8 +1607,8 @@ async def test_asimilarity_search_with_relevance_scores(mocker: MockerFixture) -
     # ----
     assert len(result) == 2
     assert result[0][0].page_content == "Hello"
-    assert result[0][0].metadata["id"] == 4
-    assert result[0][1] == (1.0 / 3) * 1
+    assert result[0][0].metadata["id"] == 1
+    assert result[0][1] == (1.0 / 3) * 3
     assert result[1][0].page_content == "Hello"
     assert result[1][0].metadata["id"] == 3
     assert result[1][1] == (1.0 / 3) * 2

@@ -172,6 +172,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return sorted(
             [(d, scores[map_ids[d.metadata[key]]]) for d in docs if d is not None],
             key=lambda x: x[1],
+            reverse=True,
         )
 
     def _get_trunk_from_sub_docs_and_score(

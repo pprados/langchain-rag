@@ -168,12 +168,13 @@ class SQLStore(BaseStore[str, bytes]):
 
     def mset(self, key_value_pairs: Sequence[Tuple[str, bytes]]) -> None:
         # try:
+        values: Dict[str, bytes] = dict(key_value_pairs)
         with self._make_session() as session:
-            self._mdetete([key for key, _ in key_value_pairs], session)
+            self._mdetete(list(values.keys()), session)
             session.add_all(
                 [
                     Value(namespace=self.namespace, key=k, value=v)
-                    for k, v in key_value_pairs
+                    for k, v in values.items()
                 ]
             )
 
