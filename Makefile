@@ -53,7 +53,7 @@ spell_fix:
 ######################
 
 clean: docs_clean api_docs_clean
-	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \;
+	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \; || true
 	@rm -Rf dist/ .make-* .mypy_cache .pytest_cache .ruff_cache
 
 docs_build:
