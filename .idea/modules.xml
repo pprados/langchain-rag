@@ -3,7 +3,6 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/langchain-rag.iml" filepath="$PROJECT_DIR$/.idea/langchain-rag.iml" />
-      <module fileurl="file://$USER_HOME$/tmp/rise/.idea/rise.iml" filepath="$USER_HOME$/tmp/rise/.idea/rise.iml" />
     </modules>
   </component>
 </project>
