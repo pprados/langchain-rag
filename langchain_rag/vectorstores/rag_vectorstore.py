@@ -14,7 +14,7 @@ from typing import (
     cast,
 )
 
-from langchain.storage import EncoderBackedStore
+from patch_langchain.storage import EncoderBackedStore
 from langchain_core.documents import BaseDocumentTransformer, Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.pydantic_v1 import BaseModel, Extra, Field
@@ -34,7 +34,7 @@ VST = TypeVar("VST", bound="VectorStore")
 
 
 def _get_source_id_assigner(
-    source_id_key: Union[str, Callable[[Document], str], None],
+        source_id_key: Union[str, Callable[[Document], str], None],
 ) -> Callable[[Document], Union[str, None]]:
     """Get the source id from the document."""
     if source_id_key is None:
@@ -137,7 +137,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     """
 
     def _get_trunk_from_sub_docs(
-        self, sub_docs: List[Document], **kwargs: Any
+            self, sub_docs: List[Document], **kwargs: Any
     ) -> List[Document]:
         if self.chunk_transformer:
             ids = []
@@ -154,7 +154,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             return result
 
     def _update_score_of_chunk(
-        self, sub_chunks_and_score: List[Tuple[Document, float]]
+            self, sub_chunks_and_score: List[Tuple[Document, float]]
     ) -> List[Tuple[Document, float]]:
         if not self.chunk_transformer:
             return sub_chunks_and_score
@@ -176,7 +176,8 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         )
 
     def _get_trunk_from_sub_docs_and_score(
-        self, sub_docs_and_score: List[Tuple[Document, float]], k: int, **kwargs: Any
+            self, sub_docs_and_score: List[Tuple[Document, float]], k: int,
+            **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         if self.chunk_transformer:
             result = self._update_score_of_chunk(sub_docs_and_score)
@@ -187,7 +188,8 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return result[:k]
 
     def as_retriever(
-        self, search_type: str = "similarity", search_kwargs: dict = {}, **kwargs: Any
+            self, search_type: str = "similarity", search_kwargs: dict = {},
+            **kwargs: Any
     ) -> VectorStoreRetriever:
         if not self.chunk_transformer:
             return self.vectorstore.as_retriever(
@@ -200,11 +202,11 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return retriever
 
     def add_documents(
-        self,
-        documents: List[Document],
-        *,
-        ids: Optional[List[str]] = None,
-        **kwargs: Any,
+            self,
+            documents: List[Document],
+            *,
+            ids: Optional[List[str]] = None,
+            **kwargs: Any,
     ) -> List[str]:
         """Adds documents to the docstore and vectorstores.
 
@@ -333,11 +335,11 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             return chunk_ids
 
     async def aadd_documents(
-        self,
-        documents: List[Document],
-        *,
-        ids: Optional[List[str]] = None,
-        **kwargs: Any,
+            self,
+            documents: List[Document],
+            *,
+            ids: Optional[List[str]] = None,
+            **kwargs: Any,
     ) -> List[str]:
         """Adds documents to the docstore and vectorstores.
 
@@ -384,11 +386,10 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         if self.parent_transformer:
             if hasattr(self.parent_transformer, "alazy_transform_documents"):
-                chunk_documents = list(
-                    await self.parent_transformer.alazy_transform_documents(
+                chunk_documents= [ doc async for doc in self.parent_transformer.alazy_transform_documents(
                         iter(documents)
-                    )
-                )
+                    )]
+
             else:
                 chunk_documents = list(
                     await self.parent_transformer.atransform_documents(documents)
@@ -450,7 +451,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             # In the retriever, it's this instances to return
             # in metadata[child_ids_key], it's possible to find the id of all
             # transformed versions
-            self.docstore.mset(full_chunk_docs)
+            await self.docstore.amset(full_chunk_docs)
 
         if self.parent_transformer:
             # With the *parent* mode, for each parent document,
@@ -462,7 +463,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             mset_values: List[Tuple[str, List[str]]] = []
             for parent_id, doc in zip(ids, documents):
                 mset_values.append((parent_id, chunk_ids_for_doc[parent_id]))
-            self.docstore.mset(mset_values)
+            await self.docstore.amset(mset_values)
             return ids
         else:
             return chunk_ids
@@ -504,14 +505,15 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return False
 
     async def adelete(
-        self, ids: Optional[List[str]] = None, **kwargs: Any
+            self, ids: Optional[List[str]] = None, **kwargs: Any
     ) -> Optional[bool]:
         if not ids:
             raise ValueError("ids must be set")
         if self.parent_transformer:
             if not ids:
                 raise ValueError("ids must be set")
-            lists_of_chunk_by_doc_ids = cast(List[List[str]], self.docstore.mget(ids))
+            lists_of_chunk_by_doc_ids = cast(List[List[str]],
+                                             await self.docstore.amget(ids))
             chunk_by_doc_ids: List[str] = []
             for list_of_ids in lists_of_chunk_by_doc_ids:
                 if list_of_ids:
@@ -524,7 +526,8 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         transformed_ids = set()
         if self.chunk_transformer:
-            chunk_docs = cast(List[Document], self.docstore.mget(chunk_by_doc_ids))
+            chunk_docs = cast(List[Document],
+                              await self.docstore.amget(chunk_by_doc_ids))
             self.docstore.mdelete(chunk_by_doc_ids)
             for chunk_doc in chunk_docs:
                 if chunk_doc:
@@ -543,17 +546,17 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
     @classmethod
     def from_texts(
-        cls: Type[VST],
-        texts: List[str],
-        embedding: Embeddings,
-        metadatas: Optional[List[dict]] = None,
-        **kwargs: Any,
+            cls: Type[VST],
+            texts: List[str],
+            embedding: Embeddings,
+            metadatas: Optional[List[dict]] = None,
+            **kwargs: Any,
     ) -> VST:
         raise NotImplementedError("from_texts not implemented")
 
     # %% searches
     def _trunk_k(
-        self, result: List[Document], kwargs: Dict[str, Any]
+            self, result: List[Document], kwargs: Dict[str, Any]
     ) -> List[Document]:
         if "k" in kwargs:
             return result[: kwargs["k"]]
@@ -568,7 +571,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, **kwargs)
 
     async def asearch(
-        self, query: str, search_type: str, **kwargs: Any
+            self, query: str, search_type: str, **kwargs: Any
     ) -> List[Document]:
         _search_kwargs = {**kwargs, **self.search_kwargs}
         subdocs = await self.vectorstore.asearch(
@@ -577,17 +580,17 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, **kwargs)
 
     def similarity_search(
-        self, query: str, k: int = 4, **kwargs: Any
+            self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
         return self.search(query=query, search_type="similarity", k=k, **kwargs)
 
     async def asimilarity_search(
-        self, query: str, k: int = 4, **kwargs: Any
+            self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
         return await self.asearch(query=query, search_type="similarity", k=k, **kwargs)
 
     def similarity_search_with_score(
-        self, query: str, k: int = 4, **kwargs: Any
+            self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         _search_kwargs = {**kwargs, **self.search_kwargs}
 
@@ -601,7 +604,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
 
     async def asimilarity_search_with_score(
-        self, query: str, k: int = 4, **kwargs: Any
+            self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         _search_kwargs = {**kwargs, **self.search_kwargs}
 
@@ -615,10 +618,10 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
 
     def similarity_search_with_relevance_scores(
-        self,
-        query: str,
-        k: int = 4,
-        **kwargs: Any,
+            self,
+            query: str,
+            k: int = 4,
+            **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         _search_kwargs = {**kwargs, **self.search_kwargs}
         subdocs_and_score = self.vectorstore.similarity_search_with_relevance_scores(
@@ -627,7 +630,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._update_score_of_chunk(subdocs_and_score)[:k]
 
     async def asimilarity_search_with_relevance_scores(
-        self, query: str, k: int = 4, **kwargs: Any
+            self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         _search_kwargs = {**kwargs, **self.search_kwargs}
         subdocs_and_score = (
@@ -638,7 +641,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._update_score_of_chunk(subdocs_and_score)[:k]
 
     def similarity_search_by_vector(
-        self, embedding: List[float], k: int = 4, **kwargs: Any
+            self, embedding: List[float], k: int = 4, **kwargs: Any
     ) -> List[Document]:
         subdocs = self.vectorstore.similarity_search_by_vector(
             embedding=embedding, k=k, **kwargs
@@ -646,7 +649,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     async def asimilarity_search_by_vector(
-        self, embedding: List[float], k: int = 4, **kwargs: Any
+            self, embedding: List[float], k: int = 4, **kwargs: Any
     ) -> List[Document]:
         subdocs = await self.vectorstore.asimilarity_search_by_vector(
             embedding=embedding, k=k, **kwargs
@@ -654,12 +657,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     def max_marginal_relevance_search(
-        self,
-        query: str,
-        k: int = 4,
-        fetch_k: int = 20,
-        lambda_mult: float = 0.5,
-        **kwargs: Any,
+            self,
+            query: str,
+            k: int = 4,
+            fetch_k: int = 20,
+            lambda_mult: float = 0.5,
+            **kwargs: Any,
     ) -> List[Document]:
         subdocs = self.vectorstore.max_marginal_relevance_search(
             query=query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
@@ -667,12 +670,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     async def amax_marginal_relevance_search(
-        self,
-        query: str,
-        k: int = 4,
-        fetch_k: int = 20,
-        lambda_mult: float = 0.5,
-        **kwargs: Any,
+            self,
+            query: str,
+            k: int = 4,
+            fetch_k: int = 20,
+            lambda_mult: float = 0.5,
+            **kwargs: Any,
     ) -> List[Document]:
         subdocs = await self.vectorstore.amax_marginal_relevance_search(
             query=query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
@@ -683,12 +686,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         )
 
     def max_marginal_relevance_search_by_vector(
-        self,
-        embedding: List[float],
-        k: int = 4,
-        fetch_k: int = 20,
-        lambda_mult: float = 0.5,
-        **kwargs: Any,
+            self,
+            embedding: List[float],
+            k: int = 4,
+            fetch_k: int = 20,
+            lambda_mult: float = 0.5,
+            **kwargs: Any,
     ) -> List[Document]:
         subdocs = self.vectorstore.max_marginal_relevance_search_by_vector(
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
@@ -696,12 +699,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         return self._get_trunk_from_sub_docs(subdocs, k=k)
 
     async def amax_marginal_relevance_search_by_vector(
-        self,
-        embedding: List[float],
-        k: int = 4,
-        fetch_k: int = 20,
-        lambda_mult: float = 0.5,
-        **kwargs: Any,
+            self,
+            embedding: List[float],
+            k: int = 4,
+            fetch_k: int = 20,
+            lambda_mult: float = 0.5,
+            **kwargs: Any,
     ) -> List[Document]:
         subdocs = await self.vectorstore.amax_marginal_relevance_search_by_vector(
             embedding=embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, **kwargs
@@ -710,12 +713,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
     @staticmethod
     def from_vs_in_memory(
-        vectorstore: VectorStore,
-        *,
-        chunk_transformer: Optional[BaseDocumentTransformer] = None,
-        parent_transformer: Optional[BaseDocumentTransformer] = None,
-        source_id_key: Union[str, Callable[[Document], str]] = "source",
-        **kwargs: Any,
+            vectorstore: VectorStore,
+            *,
+            chunk_transformer: Optional[BaseDocumentTransformer] = None,
+            parent_transformer: Optional[BaseDocumentTransformer] = None,
+            source_id_key: Union[str, Callable[[Document], str]] = "source",
+            **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.storage import InMemoryStore
 
@@ -740,24 +743,29 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         )
 
     @staticmethod
-    def from_vs_in_sql(
-        vectorstore: VectorStore,
-        engine: Optional[Union[Engine, AsyncEngine]] = None,
-        engine_kwargs: Optional[Dict[str, Any]] = None,
-        db_url: Optional[str] = None,
-        namespace: str = "rag_vectorstore",
-        *,
-        chunk_transformer: Optional[BaseDocumentTransformer] = None,
-        parent_transformer: Optional[BaseDocumentTransformer] = None,
-        **kwargs: Any,
-    ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
+    def _from_vs_in_sql(
+            vectorstore: VectorStore,
+            engine: Optional[Union[Engine, AsyncEngine]] = None,
+            engine_kwargs: Optional[Dict[str, Any]] = None,
+            db_url: Optional[str] = None,
+            namespace: str = "rag_vectorstore",
+            async_mode=False,
+            *,
+            chunk_transformer: Optional[BaseDocumentTransformer] = None,
+            parent_transformer: Optional[BaseDocumentTransformer] = None,
+            **kwargs: Any,
+    ) -> Tuple["RAGVectorStore", Dict[str, Any], "SQLRecordManager", "SQLStore"]:
         from langchain.indexes import SQLRecordManager
 
         docstore: BaseStore[str, Union[Document, List[str]]]
         if not db_url and not engine:
             raise ValueError("Set db_url or engine")
         if db_url:
-            record_manager = SQLRecordManager(namespace=namespace, db_url=db_url)
+            record_manager = SQLRecordManager(
+                namespace=namespace,
+                db_url=db_url,
+                async_mode=async_mode,
+            )
             record_manager.create_schema()
             # This implementation is not correct now.
             # from langchain_community.storage.sql import SQLBaseStore
@@ -770,8 +778,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             from ..storage.sql_docstore import SQLStore
 
             sql_docstore = SQLStore(
-                namespace=namespace,
-                db_url=db_url,
+                namespace=namespace, db_url=db_url, async_mode=async_mode
             )
             sql_docstore.create_schema()
             docstore = EncoderBackedStore[str, Union[Document, List[str]]](
@@ -788,13 +795,17 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             from ..storage.sql_docstore import SQLStore
 
             record_manager = SQLRecordManager(
-                namespace=namespace, engine=engine, engine_kwargs=engine_kwargs
+                namespace=namespace,
+                engine=engine,
+                engine_kwargs=engine_kwargs,
+                async_mode=async_mode,
             )
-            record_manager.create_schema()
             sql_docstore = SQLStore(
-                namespace=namespace, engine=engine, engine_kwargs=engine_kwargs
+                namespace=namespace,
+                engine=engine,
+                engine_kwargs=engine_kwargs,
+                async_mode=async_mode,
             )
-            sql_docstore.create_schema()
             docstore = EncoderBackedStore[str, Union[Document, List[str]]](
                 store=sql_docstore,
                 key_encoder=lambda x: x,
@@ -816,4 +827,84 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 "vector_store": vectorstore,
                 "source_id_key": kwargs.get("source_id_key", "source"),
             },
+            record_manager,
+            sql_docstore,
         )
+
+    @staticmethod
+    def from_vs_in_sql(
+            vectorstore: VectorStore,
+            engine: Optional[Union[Engine, AsyncEngine]] = None,
+            engine_kwargs: Optional[Dict[str, Any]] = None,
+            db_url: Optional[str] = None,
+            namespace: str = "rag_vectorstore",
+            *,
+            chunk_transformer: Optional[BaseDocumentTransformer] = None,
+            parent_transformer: Optional[BaseDocumentTransformer] = None,
+            use_async: bool = False,
+            **kwargs: Any,
+    ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
+        async_mode = isinstance(engine, AsyncEngine)  # FIXME: peut etre none
+        (
+            vectorstore,
+            index_kwargs,
+            record_manager,
+            sql_docstore,
+        ) = RAGVectorStore._from_vs_in_sql(
+            vectorstore=vectorstore,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            db_url=db_url,
+            namespace=namespace,
+            async_mode=async_mode,
+            chunk_transformer=chunk_transformer,
+            parent_transformer=parent_transformer,
+            **kwargs,
+        )
+
+        if async_mode:
+            import asyncio
+
+            async def create_schema():
+                await record_manager.acreate_schema()
+                await sql_docstore.acreate_schema()
+
+            asyncio.run(create_schema())
+        else:
+            record_manager.create_schema()
+            sql_docstore.create_schema()
+        return vectorstore, index_kwargs
+
+    @staticmethod
+    async def afrom_vs_in_sql(
+            vectorstore: VectorStore,
+            engine: Optional[Union[Engine, AsyncEngine]] = None,
+            engine_kwargs: Optional[Dict[str, Any]] = None,
+            db_url: Optional[str] = None,
+            namespace: str = "rag_vectorstore",
+            async_mode=False,
+            *,
+            chunk_transformer: Optional[BaseDocumentTransformer] = None,
+            parent_transformer: Optional[BaseDocumentTransformer] = None,
+            **kwargs: Any,
+    ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
+        async_mode = False
+        (
+            vectorstore,
+            index_kwargs,
+            record_manager,
+            sql_docstore,
+        ) = RAGVectorStore._from_vs_in_sql(
+            vectorstore=vectorstore,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            db_url=db_url,
+            namespace=namespace,
+            async_mode=async_mode,
+            chunk_transformer=chunk_transformer,
+            parent_transformer=parent_transformer,
+            **kwargs,
+        )
+        await record_manager.create_schema()
+        await sql_docstore.create_schema()
+        return vectorstore, index_kwargs
