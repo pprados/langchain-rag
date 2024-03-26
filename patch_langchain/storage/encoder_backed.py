@@ -1,6 +1,5 @@
 from typing import (
     Any,
-    AsyncIterator,
     Callable,
     Iterator,
     List,
@@ -75,15 +74,6 @@ class EncoderBackedStore(BaseStore[K, V]):
         ]
 
     async def amget(self, keys: Sequence[K]) -> List[Optional[V]]:
-        """Get the values associated with the given keys.
-
-        Args:
-            keys (Sequence[K]): A sequence of keys.
-
-        Returns:
-            A sequence of optional values associated with the keys.
-            If a key is not found, the corresponding value will be None.
-        """
         encoded_keys: List[str] = [self.key_encoder(key) for key in keys]
         values = await self.store.amget(encoded_keys)
         return [
@@ -132,20 +122,3 @@ class EncoderBackedStore(BaseStore[K, V]):
         # For the time being this does not return K, but str
         # it's for debugging purposes. Should fix this.
         yield from self.store.yield_keys(prefix=prefix)
-
-    async def ayield_keys(
-        self, *, prefix: Optional[str] = None
-    ) -> Union[AsyncIterator[K], AsyncIterator[str]]:
-        """Get an iterator over keys that match the given prefix.
-
-        Args:
-            prefix (str): The prefix to match.
-
-        Returns:
-            Iterator[K | str]: An iterator over keys that match the given prefix.
-
-            This method is allowed to return an iterator over either K or str
-            depending on what makes more sense for the given store.
-        """
-        async for key in self.store.ayield_keys(prefix=prefix):
-            yield key
