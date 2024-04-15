@@ -5,7 +5,6 @@ from langchain_core.documents import BaseDocumentTransformer, Document
 
 from .runnable_document_transformer import (
     _RunnableGeneratorDocumentTransformer,
-    to_async_iterator,
 )
 
 
@@ -15,6 +14,7 @@ class DocumentTransformerPipeline(_RunnableGeneratorDocumentTransformer):
 
     transformers: Sequence[BaseDocumentTransformer]
     """List of document transformers that are chained together and run in sequence."""
+
     # def __init__(self, transformers: Sequence[BaseDocumentTransformer]):
     #     self.transformers = transformers
 
@@ -53,25 +53,22 @@ class DocumentTransformerPipeline(_RunnableGeneratorDocumentTransformer):
         transformer: BaseDocumentTransformer,
         **kwargs: Any,
     ) -> AsyncIterator[Document]:
-        lazy_results = []
         async for _document in documents:
-            if hasattr(transformer, "lazy_transform_documents"):
-                lazy_results.append(
-                    await cast(
-                        _RunnableGeneratorDocumentTransformer, transformer
-                    ).alazy_transform_documents([_document], **kwargs)
-                )
+            if hasattr(transformer, "alazy_transform_documents"):
+                async for doc in cast(
+                    _RunnableGeneratorDocumentTransformer, transformer
+                ).alazy_transform_documents([_document], **kwargs):
+                    yield doc
             else:
-                lazy_results.append(
-                    iter(await transformer.atransform_documents([_document], **kwargs))
-                )
-        return to_async_iterator(chain(*lazy_results))
+                docs = await transformer.atransform_documents([_document], **kwargs)
+                for doc in docs:
+                    yield doc
 
     async def _alazy_transform_documents(  # type: ignore
         self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         for _transformer in self.transformers:
-            documents = await self._alazy_transform_documents_with_transformer(
+            async for doc in self._alazy_transform_documents_with_transformer(
                 documents, transformer=_transformer
-            )
-        return documents
+            ):
+                yield doc

@@ -1,7 +1,10 @@
+import asyncio
 import contextlib
 from pathlib import Path
 from typing import (
     Any,
+    AsyncGenerator,
+    AsyncIterator,
     Dict,
     Generator,
     Iterator,
@@ -13,13 +16,7 @@ from typing import (
 )
 
 from langchain_core.stores import BaseStore
-from sqlalchemy import (
-    Column,
-    Engine,
-    PickleType,
-    and_,
-    create_engine,
-)
+from sqlalchemy import Column, Engine, PickleType, and_, create_engine, delete, select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -128,21 +125,38 @@ class SQLStore(BaseStore[str, bytes]):
     def create_schema(self) -> None:
         Base.metadata.create_all(self.engine)
 
+    async def acreate_schema(self) -> None:
+        """Create the database schema."""
+
+        if not isinstance(self.engine, AsyncEngine):
+            raise AssertionError("This method is not supported for sync engines.")
+
+        async with self.engine.begin() as session:
+            # print("*********************************")
+            # asyncio.set_event_loop(asyncio.new_event_loop())
+            # print(f"{id(asyncio.get_event_loop())=}")
+            # print(f"{asyncio.get_event_loop().is_running()=}")
+
+            await session.run_sync(Base.metadata.create_all)
+
     def drop(self) -> None:
         Base.metadata.drop_all(bind=self.engine.connect())
 
-    # async def amget(self, keys: Sequence[K]) -> List[Optional[V]]:
-    #     result = {}
-    #     async with self._make_session() as session:
-    #         async with session.begin():
-    #             for v in session.query(Value).filter(
-    #                     and_(
-    #                         Value.key.in_(keys),
-    #                         Value.namespace == self.namespace,
-    #                     )
-    #             ):
-    #                 result[v.key] = v.value
-    #     return [result.get(key) for key in keys]
+    async def amget(self, keys: Sequence[str]) -> List[Optional[bytes]]:
+        if not isinstance(self.engine, AsyncEngine):
+            raise AssertionError("This method is not supported for sync engines.")
+        result = {}
+        async with self._amake_session() as session:
+            async with session.begin():
+                q = select(Value).filter(
+                    and_(
+                        Value.key.in_(keys),
+                        Value.namespace == self.namespace,
+                    )
+                )
+                for v in (await session.execute(q)).scalars():
+                    result[v.key] = v.value
+        return [result.get(key) for key in keys]
 
     def mget(self, keys: Sequence[str]) -> List[Optional[bytes]]:
         result = {}
@@ -157,20 +171,11 @@ class SQLStore(BaseStore[str, bytes]):
                 result[v.key] = v.value
         return [result.get(key) for key in keys]
 
-    # async def amset(self, key_value_pairs: Sequence[Tuple[K, V]]) -> None:
-    #     async with self._make_session() as session:
-    #         async with session.begin():
-    #             # await self._amdetete([key for key, _ in key_value_pairs], session)
-    #             session.add_all([Value(namespace=self.namespace,
-    #                                    key=k,
-    #                                    value=v) for k, v in key_value_pairs])
-    #             session.commit()
-
     def mset(self, key_value_pairs: Sequence[Tuple[str, bytes]]) -> None:
         # try:
         values: Dict[str, bytes] = dict(key_value_pairs)
         with self._make_session() as session:
-            self._mdetete(list(values.keys()), session)
+            self._mdelete(list(values.keys()), session)
             session.add_all(
                 [
                     Value(namespace=self.namespace, key=k, value=v)
@@ -178,7 +183,21 @@ class SQLStore(BaseStore[str, bytes]):
                 ]
             )
 
-    def _mdetete(self, keys: Sequence[str], session: Session) -> None:
+    async def amset(self, key_value_pairs: Sequence[Tuple[str, bytes]]) -> None:
+        if not isinstance(self.engine, AsyncEngine):
+            raise AssertionError("This method is not supported for sync engines.")
+        async with self._amake_session() as session:
+            async with session.begin():
+                # await self._amdetete([key for key, _ in key_value_pairs], session)
+                session.add_all(
+                    [
+                        Value(namespace=self.namespace, key=k, value=v)
+                        for k, v in key_value_pairs
+                    ]
+                )
+                await session.commit()
+
+    def _mdelete(self, keys: Sequence[str], session: Session) -> None:
         with session.begin():
             session.query(Value).filter(  # type: ignore
                 and_(
@@ -187,31 +206,61 @@ class SQLStore(BaseStore[str, bytes]):
                 )
             ).delete()
 
-    # async def _amdetete(self, keys: Sequence[str], session: Session) -> None:
-    #     await session.query(Value).filter(
-    #         and_(
-    #             Value.key.in_(keys),
-    #             Value.namespace == self.namespace,
-    #         )
-    #     ).delete()
+    async def _amdelete(self, keys: Sequence[str], session: Session) -> None:
+        async with self._amake_session() as session:
+            async with session.begin():
+                delete(Value).filter(
+                    and_(
+                        Value.key.in_(keys),
+                        Value.namespace == self.namespace,
+                    )
+                )
 
     def mdelete(self, keys: Sequence[str]) -> None:
         with self._make_session() as session:
-            self._mdetete(keys, session)
+            self._mdelete(keys, session)
             session.commit()
 
-    # async def amdelete(self, keys: Sequence[str]) -> None:
-    #     with self._make_session() as session:
-    #         await self._mdelete(keys, session)
-    #         session.commit()
+    async def amdelete(self, keys: Sequence[str]) -> None:
+        if not isinstance(self.engine, AsyncEngine):
+            raise AssertionError("This method is not supported for sync engines.")
+        async with self._amake_session() as session:
+            await self._amdelete(keys, session)
+            await session.commit()
 
     def yield_keys(self, *, prefix: Optional[str] = None) -> Iterator[str]:
         with self._make_session() as session:
-            for v in session.query(Value).filter(  # type: ignore
-                Value.namespace == self.namespace
-            ):
+            if prefix:
+                clause = and_(
+                    Value.key.like(f"{prefix}%"),
+                    Value.namespace == self.namespace,
+                )
+            else:
+                clause = Value.namespace == self.namespace
+            for v in session.query(Value).filter(clause):
                 yield str(v.key)
             session.close()
+
+    async def ayield_keys(self, *, prefix: Optional[str] = None) -> AsyncIterator[str]:
+        if not isinstance(self.engine, AsyncEngine):
+            raise AssertionError("This method is not supported for sync engines.")
+        async with self._amake_session() as session:
+            async with session.begin():
+                try:
+                    if prefix:
+                        clause = and_(
+                            Value.key.like(f"{prefix}%"),
+                            Value.namespace == self.namespace,
+                        )
+                    else:
+                        clause = Value.namespace == self.namespace
+                    q = select(Value).filter(clause)
+                    for v in (await session.execute(q)).scalars():
+                        yield str(v.key)
+                    await session.close()
+                except:
+                    await session.rollback()
+                    raise
 
     @contextlib.contextmanager
     def _make_session(self) -> Generator[Session, None, None]:
@@ -226,12 +275,12 @@ class SQLStore(BaseStore[str, bytes]):
         finally:
             session.commit()
 
-    # @contextlib.asynccontextmanager
-    # async def _amake_session(self) -> AsyncGenerator[AsyncSession, None]:
-    #     """Create a session and close it after use."""
-    #
-    #     if not isinstance(self.session_factory, async_sessionmaker):
-    #         raise AssertionError("This method is not supported for sync engines.")
-    #
-    #     async with self.session_factory() as session:
-    #         yield session
+    @contextlib.asynccontextmanager
+    async def _amake_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Create a session and close it after use."""
+
+        if not isinstance(self.session_factory, async_sessionmaker):
+            raise AssertionError("This method is not supported for sync engines.")
+
+        async with self.session_factory() as session:
+            yield session

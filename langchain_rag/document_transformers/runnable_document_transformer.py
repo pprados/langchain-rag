@@ -160,7 +160,7 @@ class LazyDocumentTransformer(BaseDocumentTransformer):
         Returns:
             An iterator of transformed Documents.
         """
-        if isinstance(documents, Iterable):
+        if isinstance(documents, Sequence):
             async_documents = to_async_iterator(iter(documents))
         elif isinstance(documents, AsyncIterator):
             async_documents = documents

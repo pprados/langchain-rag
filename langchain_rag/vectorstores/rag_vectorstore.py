@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import uuid
 from typing import (
@@ -14,7 +15,6 @@ from typing import (
     cast,
 )
 
-from langchain.storage import EncoderBackedStore
 from langchain_core.documents import BaseDocumentTransformer, Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.pydantic_v1 import BaseModel, Extra, Field
@@ -384,14 +384,15 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         if self.parent_transformer:
             if hasattr(self.parent_transformer, "alazy_transform_documents"):
-                chunk_documents = list(
-                    await self.parent_transformer.alazy_transform_documents(
-                        iter(documents)
+                chunk_documents = [
+                    doc
+                    async for doc in self.parent_transformer.alazy_transform_documents(
+                        documents
                     )
-                )
+                ]
             else:
-                chunk_documents = list(
-                    await self.parent_transformer.atransform_documents(documents)
+                chunk_documents = await self.parent_transformer.atransform_documents(
+                    documents
                 )
         else:
             chunk_documents = documents
@@ -401,9 +402,6 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             # Put the associated chunk id after the transformation.
             # Then, it's possible to retrieve the original chunk with this
             # transformation.
-            # for chunk in chunk_documents
-            #     if self.chunk_id_key not in chunk.metadata:
-            #         chunk.metadata[self.chunk_id_key]=str(uuid.uuid4())
             chunk_ids = [
                 chunk.metadata.get(self.chunk_id_key, str(uuid.uuid4()))
                 for chunk in chunk_documents
@@ -450,7 +448,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             # In the retriever, it's this instances to return
             # in metadata[child_ids_key], it's possible to find the id of all
             # transformed versions
-            self.docstore.mset(full_chunk_docs)
+            await self.docstore.amset(full_chunk_docs)
 
         if self.parent_transformer:
             # With the *parent* mode, for each parent document,
@@ -462,7 +460,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             mset_values: List[Tuple[str, List[str]]] = []
             for parent_id, doc in zip(ids, documents):
                 mset_values.append((parent_id, chunk_ids_for_doc[parent_id]))
-            self.docstore.mset(mset_values)
+            await self.docstore.amset(mset_values)
             return ids
         else:
             return chunk_ids
@@ -511,7 +509,9 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         if self.parent_transformer:
             if not ids:
                 raise ValueError("ids must be set")
-            lists_of_chunk_by_doc_ids = cast(List[List[str]], self.docstore.mget(ids))
+            lists_of_chunk_by_doc_ids = cast(
+                List[List[str]], await self.docstore.amget(ids)
+            )
             chunk_by_doc_ids: List[str] = []
             for list_of_ids in lists_of_chunk_by_doc_ids:
                 if list_of_ids:
@@ -524,8 +524,10 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         transformed_ids = set()
         if self.chunk_transformer:
-            chunk_docs = cast(List[Document], self.docstore.mget(chunk_by_doc_ids))
-            self.docstore.mdelete(chunk_by_doc_ids)
+            chunk_docs = cast(
+                List[Document], await self.docstore.amget(chunk_by_doc_ids)
+            )
+            await self.docstore.amdelete(chunk_by_doc_ids)
             for chunk_doc in chunk_docs:
                 if chunk_doc:
                     transformed_ids.update(
@@ -753,10 +755,12 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.indexes import SQLRecordManager
 
+        from patch_langchain.storage import EncoderBackedStore
+
         docstore: BaseStore[str, Union[Document, List[str]]]
         if not db_url and not engine:
             raise ValueError("Set db_url or engine")
-        if db_url:
+        if db_url:  # FIXME
             record_manager = SQLRecordManager(namespace=namespace, db_url=db_url)
             record_manager.create_schema()
             # This implementation is not correct now.
@@ -787,14 +791,31 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
             from ..storage.sql_docstore import SQLStore
 
+            async_mode = isinstance(engine, AsyncEngine)
             record_manager = SQLRecordManager(
-                namespace=namespace, engine=engine, engine_kwargs=engine_kwargs
+                namespace=namespace,
+                engine=engine,
+                engine_kwargs=engine_kwargs,
+                async_mode=async_mode,
             )
-            record_manager.create_schema()
             sql_docstore = SQLStore(
-                namespace=namespace, engine=engine, engine_kwargs=engine_kwargs
+                namespace=namespace,
+                engine=engine,
+                engine_kwargs=engine_kwargs,
+                async_mode=async_mode,
             )
-            sql_docstore.create_schema()
+            if not async_mode:
+                record_manager.create_schema()
+                sql_docstore.create_schema()
+            else:
+
+                async def init():
+                    await record_manager.acreate_schema()
+                    await sql_docstore.acreate_schema()
+
+                asyncio.run(init(), debug=True)
+                # asyncio.run(record_manager.acreate_schema(),debug=True)
+                # asyncio.run(sql_docstore.acreate_schema(),debug=True)
             docstore = EncoderBackedStore[str, Union[Document, List[str]]](
                 store=sql_docstore,
                 key_encoder=lambda x: x,
