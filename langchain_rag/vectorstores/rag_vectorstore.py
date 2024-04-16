@@ -1,6 +1,8 @@
 import asyncio
 import hashlib
+import threading
 import uuid
+from contextlib import contextmanager
 from typing import (
     Any,
     Callable,
@@ -21,11 +23,15 @@ from langchain_core.pydantic_v1 import BaseModel, Extra, Field
 from langchain_core.stores import BaseStore
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from sqlalchemy import (
+    Connection,
     Engine,
+    create_engine,
 )
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
+    create_async_engine,
 )
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 from .wrapper_vectorstore import WrapperVectorStore
 
@@ -741,97 +747,177 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             },
         )
 
+    def session_maker(self, bind: Engine | Connection):
+        return scoped_session(sessionmaker(bind=bind))
+
+    @staticmethod
+    def set_session_factory(connection: Connection):
+        import threading
+
+        print(f"{threading.current_thread().ident}")
+        context = RAGVectorStore._context_session_factory
+        if not hasattr(context, "sessionfactory"):
+            context.sessionfactory = scoped_session(sessionmaker(bind=connection))
+            old_sessionfactory = None
+        else:
+            old_sessionfactory = context.sessionfactory
+        return old_sessionfactory, context.sessionfactory
+
+    @staticmethod
+    @contextmanager
+    def index_session_factory(engine: Engine):
+        """
+        Create an outer session factory, to index() a list of documents, with only
+        one SQL transaction.
+        If you use this context manager, with data
+        Sample:
+        ```
+        echo = True
+        db_url = "postgresql+psycopg://postgres:password_postgres@localhost:5432/"
+        engine = create_engine(db_url,echo=echo)
+        embeddings = FakeEmbeddings()
+        pgvector = PGVector(
+            embeddings=embeddings,
+            connection=engine,
+            engine_args={"echo": echo},
+        )
+
+        rag_vectorstore, index_kwargs = RAGVectorStore.from_vs_in_sql(
+            vectorstore=pgvector,
+            engine=engine,
+        )
+        # Import all the data in one transaction. All the database will be stables.
+        with RAGVectorStore.index_session_factory(engine) as session:
+            loader = CSVLoader(
+                    "data/faq/faq.csv",
+                    source_column="source",
+                    autodetect_encoding=True,
+                )
+            result = index(
+                docs_source=loader,
+                cleanup="incremental",
+                **index_kwargs,
+            )
+            session.commit()  # Commit all the import or rollback all
+        ```
+
+        Args:
+            engine: The SQL engine to use.
+
+        Returns
+        -------
+
+        """
+        connection = engine.connect()
+        context = RAGVectorStore._context_session_factory
+        if not hasattr(context, "sessionfactory"):
+            context.sessionfactory = scoped_session(sessionmaker(bind=connection))
+            old_sessionfactory = None
+        else:
+            old_sessionfactory = context.sessionfactory
+        outer_transaction = connection.begin()
+        yield context.sessionfactory()
+        if old_sessionfactory:
+            context.sessionfactory = old_sessionfactory
+        RAGVectorStore.set_session_factory(engine)
+        outer_transaction.commit()
+        outer_transaction.close()
+        connection.close()
+
+    _context_session_factory = threading.local()
+
     @staticmethod
     def from_vs_in_sql(
         vectorstore: VectorStore,
-        engine: Optional[Union[Engine, AsyncEngine]] = None,
+        *,
+        engine: Union[None, Engine, AsyncEngine] = None,
         engine_kwargs: Optional[Dict[str, Any]] = None,
         db_url: Optional[str] = None,
+        use_async: bool = False,
         namespace: str = "rag_vectorstore",
-        *,
         chunk_transformer: Optional[BaseDocumentTransformer] = None,
         parent_transformer: Optional[BaseDocumentTransformer] = None,
+        session_factory: Callable | None = None,
         **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.indexes import SQLRecordManager
 
         from patch_langchain.storage import EncoderBackedStore
 
+        def local_session():
+            context = RAGVectorStore._context_session_factory
+            if not hasattr(context, "sessionfactory"):
+                context.sessionfactory = scoped_session(sessionmaker(bind=engine))
+            session = context.sessionfactory()
+            return session
+
+        if not session_factory:
+            # session_factory=scoped_session(sessionmaker(bind=engine))
+            session_factory = local_session
+
         docstore: BaseStore[str, Union[Document, List[str]]]
         if not db_url and not engine:
             raise ValueError("Set db_url or engine")
-        if db_url:  # FIXME
-            record_manager = SQLRecordManager(namespace=namespace, db_url=db_url)
-            record_manager.create_schema()
-            # This implementation is not correct now.
-            # from langchain_community.storage.sql import SQLBaseStore
-            # docstore = SQLBaseStore[Union[Document, List[str]]](
-            #     collection_name=namespace,
-            #     connection_string=db_url,
-            # )
-            import pickle
 
-            from ..storage.sql_docstore import SQLStore
-
-            sql_docstore = SQLStore(
-                namespace=namespace,
-                db_url=db_url,
-            )
-            sql_docstore.create_schema()
-            docstore = EncoderBackedStore[str, Union[Document, List[str]]](
-                store=sql_docstore,
-                key_encoder=lambda x: x,
-                value_serializer=pickle.dumps,
-                value_deserializer=pickle.loads,
-            )
-        else:
-            # Note: the PR https://github.com/langchain-ai/langchain/pull/15909
-            # is not compatible with "engine"
-            import pickle
-
-            from ..storage.sql_docstore import SQLStore
-
-            async_mode = isinstance(engine, AsyncEngine)
-            record_manager = SQLRecordManager(
-                namespace=namespace,
-                engine=engine,
-                engine_kwargs=engine_kwargs,
-                async_mode=async_mode,
-            )
-            sql_docstore = SQLStore(
-                namespace=namespace,
-                engine=engine,
-                engine_kwargs=engine_kwargs,
-                async_mode=async_mode,
-            )
-            if not async_mode:
-                record_manager.create_schema()
-                sql_docstore.create_schema()
+        if db_url:
+            if use_async:
+                engine = create_async_engine(url=str(db_url), **(engine_kwargs or {}))
             else:
+                engine = create_engine(url=str(db_url), **(engine_kwargs or {}))
 
-                async def init():
-                    await record_manager.acreate_schema()
-                    await sql_docstore.acreate_schema()
+        import pickle
 
-                asyncio.run(init(), debug=True)
-                # asyncio.run(record_manager.acreate_schema(),debug=True)
-                # asyncio.run(sql_docstore.acreate_schema(),debug=True)
-            docstore = EncoderBackedStore[str, Union[Document, List[str]]](
-                store=sql_docstore,
-                key_encoder=lambda x: x,
-                value_serializer=pickle.dumps,
-                value_deserializer=pickle.loads,
-            )
+        from ..storage.sql_docstore import SQLStore
 
-        vectorstore = RAGVectorStore(
+        async_mode = isinstance(engine, AsyncEngine)
+        record_manager = SQLRecordManager(
+            namespace=namespace,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            async_mode=async_mode,
+        )
+        sql_docstore = SQLStore(
+            namespace=namespace,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            async_mode=async_mode,
+        )
+        if not async_mode:
+            record_manager.create_schema()
+            sql_docstore.create_schema()
+        else:
+
+            async def init():
+                await record_manager.acreate_schema()
+                await sql_docstore.acreate_schema()
+
+            asyncio.run(init(), debug=True)
+            # asyncio.run(record_manager.acreate_schema(),debug=True)
+            # asyncio.run(sql_docstore.acreate_schema(),debug=True)
+        docstore = EncoderBackedStore[str, Union[Document, List[str]]](
+            store=sql_docstore,
+            key_encoder=lambda x: x,
+            value_serializer=pickle.dumps,
+            value_deserializer=pickle.loads,
+        )
+        rag_vectorstore = RAGVectorStore(
             vectorstore=vectorstore,
             docstore=docstore,
             parent_transformer=parent_transformer,
             chunk_transformer=chunk_transformer,
             **kwargs,
         )
+
+        # Align all the sessions factories
+        record_manager.session_factory = session_factory
+        sql_docstore.session_factory = session_factory
+        if hasattr(vectorstore, "session_maker"):
+            vectorstore.session_maker = session_factory
+        if hasattr(vectorstore, "session_factory"):
+            vectorstore.session_factory = session_factory
+
         return (
-            vectorstore,
+            rag_vectorstore,
             {
                 "record_manager": record_manager,
                 "vector_store": vectorstore,

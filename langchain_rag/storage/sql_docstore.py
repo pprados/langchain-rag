@@ -115,7 +115,7 @@ class SQLStore(BaseStore[str, bytes]):
         if isinstance(_engine, AsyncEngine):
             _session_factory = async_sessionmaker(bind=_engine)
         else:
-            _session_factory = sessionmaker(bind=_engine)
+            _session_factory = scoped_session(sessionmaker(bind=_engine))
 
         self.engine = _engine
         self.dialect = _engine.dialect.name
@@ -182,6 +182,7 @@ class SQLStore(BaseStore[str, bytes]):
                     for k, v in values.items()
                 ]
             )
+            session.commit()
 
     async def amset(self, key_value_pairs: Sequence[Tuple[str, bytes]]) -> None:
         if not isinstance(self.engine, AsyncEngine):
@@ -269,11 +270,7 @@ class SQLStore(BaseStore[str, bytes]):
         if isinstance(self.session_factory, async_sessionmaker):
             raise AssertionError("This method is not supported for async engines.")
 
-        session = scoped_session(self.session_factory)()
-        try:
-            yield session
-        finally:
-            session.commit()
+        yield self.session_factory()
 
     @contextlib.asynccontextmanager
     async def _amake_session(self) -> AsyncGenerator[AsyncSession, None]:
