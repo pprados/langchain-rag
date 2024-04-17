@@ -1,5 +1,10 @@
+import asyncio
 import hashlib
+import threading
 import uuid
+from asyncio import current_task, Task
+from contextlib import contextmanager, asynccontextmanager
+from contextvars import ContextVar
 from typing import (
     Any,
     Callable,
@@ -14,18 +19,22 @@ from typing import (
     cast,
 )
 
-from patch_langchain.storage import EncoderBackedStore
 from langchain_core.documents import BaseDocumentTransformer, Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.pydantic_v1 import BaseModel, Extra, Field
 from langchain_core.stores import BaseStore
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from sqlalchemy import (
+    Connection,
     Engine,
+    create_engine,
 )
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
+    create_async_engine, async_sessionmaker, async_scoped_session, AsyncSession,
+    AsyncConnection,
 )
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 from .wrapper_vectorstore import WrapperVectorStore
 
@@ -386,13 +395,15 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         if self.parent_transformer:
             if hasattr(self.parent_transformer, "alazy_transform_documents"):
-                chunk_documents= [ doc async for doc in self.parent_transformer.alazy_transform_documents(
-                        iter(documents)
-                    )]
-
+                chunk_documents = [
+                    doc
+                    async for doc in self.parent_transformer.alazy_transform_documents(
+                        documents
+                    )
+                ]
             else:
-                chunk_documents = list(
-                    await self.parent_transformer.atransform_documents(documents)
+                chunk_documents = await self.parent_transformer.atransform_documents(
+                    documents
                 )
         else:
             chunk_documents = documents
@@ -402,9 +413,6 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             # Put the associated chunk id after the transformation.
             # Then, it's possible to retrieve the original chunk with this
             # transformation.
-            # for chunk in chunk_documents
-            #     if self.chunk_id_key not in chunk.metadata:
-            #         chunk.metadata[self.chunk_id_key]=str(uuid.uuid4())
             chunk_ids = [
                 chunk.metadata.get(self.chunk_id_key, str(uuid.uuid4()))
                 for chunk in chunk_documents
@@ -512,8 +520,9 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         if self.parent_transformer:
             if not ids:
                 raise ValueError("ids must be set")
-            lists_of_chunk_by_doc_ids = cast(List[List[str]],
-                                             await self.docstore.amget(ids))
+            lists_of_chunk_by_doc_ids = cast(
+                List[List[str]], await self.docstore.amget(ids)
+            )
             chunk_by_doc_ids: List[str] = []
             for list_of_ids in lists_of_chunk_by_doc_ids:
                 if list_of_ids:
@@ -526,9 +535,10 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         transformed_ids = set()
         if self.chunk_transformer:
-            chunk_docs = cast(List[Document],
-                              await self.docstore.amget(chunk_by_doc_ids))
-            self.docstore.mdelete(chunk_by_doc_ids)
+            chunk_docs = cast(
+                List[Document], await self.docstore.amget(chunk_by_doc_ids)
+            )
+            await self.docstore.amdelete(chunk_by_doc_ids)
             for chunk_doc in chunk_docs:
                 if chunk_doc:
                     transformed_ids.update(
@@ -742,169 +752,231 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             },
         )
 
+    def session_maker(self, bind: Engine | Connection):
+        return scoped_session(sessionmaker(bind=bind))
+
     @staticmethod
-    def _from_vs_in_sql(
+    def update_thread_session_factory(bind: Engine | Connection) -> session_maker:
+        context = RAGVectorStore._thread_session_factory
+        if not hasattr(context, "sessionfactory"):
+            context.sessionfactory = scoped_session(sessionmaker(bind=bind))
+        return context.sessionfactory
+
+    @staticmethod
+    def update_async_session_factory(bind: AsyncEngine | AsyncConnection) -> async_scoped_session:
+
+        context = RAGVectorStore._async_session_factory
+        old_sessionfactory = context.get()
+        if not old_sessionfactory:
+            context.set(async_scoped_session(async_sessionmaker(bind=bind),
+                                                          scopefunc=current_task))
+        return cast(async_scoped_session,context.get())
+
+    _thread_session_factory = threading.local()
+    _async_session_factory = ContextVar("async_sessionfactory", default=None)
+
+    @staticmethod
+    @contextmanager
+    def index_session_factory(engine: Engine):
+        """
+        Create an outer session factory, to index() a list of documents, with only
+        one SQL transaction.
+        If you use this context manager, with data
+        Sample:
+        ```
+        echo = True
+        db_url = "postgresql+psycopg://postgres:password_postgres@localhost:5432/"
+        engine = create_engine(db_url,echo=echo)
+        embeddings = FakeEmbeddings()
+        pgvector = PGVector(
+            embeddings=embeddings,
+            connection=engine,
+            engine_args={"echo": echo},
+        )
+
+        rag_vectorstore, index_kwargs = RAGVectorStore.from_vs_in_sql(
+            vectorstore=pgvector,
+            engine=engine,
+        )
+        # Import all the data in one transaction. All the database will be stables.
+        with RAGVectorStore.index_session_factory(engine) as session:
+            loader = CSVLoader(
+                    "data/faq/faq.csv",
+                    source_column="source",
+                    autodetect_encoding=True,
+                )
+            result = index(
+                docs_source=loader,
+                cleanup="incremental",
+                **index_kwargs,
+            )
+            session.commit()  # Commit all the import or rollback all
+        ```
+
+        Args:
+            engine: The SQL engine to use.
+
+        Yield:
+            session
+        """
+        # Use an async_scoped_session associated with the connection.
+        # Then, it's possible to merge the inner transaction with the outer transaction.
+        connection = engine.connect()
+        session_factory = RAGVectorStore.update_thread_session_factory(connection)
+        outer_transaction = connection.begin()
+        yield session_factory()
+        RAGVectorStore.update_thread_session_factory(engine)
+        outer_transaction.commit()
+        outer_transaction.close()
+        connection.close()
+
+    @staticmethod
+    @asynccontextmanager
+    async def aindex_session_factory(engine: AsyncEngine):
+        # Use an async_scoped_session associated with the connection.
+        # Then, it's possible to merge the inner transaction with the outer transaction.
+        connection = await engine.connect()
+        session_factory = RAGVectorStore.update_async_session_factory(connection)
+        outer_transaction = await connection.begin()
+        yield session_factory()
+        RAGVectorStore.update_async_session_factory(engine)
+        await outer_transaction.commit()  # FIXME: est-ce un doublon ?
+        await outer_transaction.close()
+        await connection.close()
+
+    @staticmethod
+    def from_vs_in_sql(
             vectorstore: VectorStore,
-            engine: Optional[Union[Engine, AsyncEngine]] = None,
+            *,
+            engine: Union[None, Engine, AsyncEngine] = None,
             engine_kwargs: Optional[Dict[str, Any]] = None,
             db_url: Optional[str] = None,
+            use_async: Optional[bool] = None,
             namespace: str = "rag_vectorstore",
-            async_mode=False,
-            *,
             chunk_transformer: Optional[BaseDocumentTransformer] = None,
             parent_transformer: Optional[BaseDocumentTransformer] = None,
+            session_factory: Callable | None = None,
             **kwargs: Any,
-    ) -> Tuple["RAGVectorStore", Dict[str, Any], "SQLRecordManager", "SQLStore"]:
+    ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.indexes import SQLRecordManager
+
+        from patch_langchain.storage import EncoderBackedStore
+        if isinstance(engine, AsyncEngine):
+            assert use_async is not False, "engine is AsyncEngine, use_async must be True or None"
+            use_async = True  # Force async mode
+        if use_async is None:
+            use_async = False
 
         docstore: BaseStore[str, Union[Document, List[str]]]
         if not db_url and not engine:
             raise ValueError("Set db_url or engine")
+
         if db_url:
-            record_manager = SQLRecordManager(
-                namespace=namespace,
-                db_url=db_url,
-                async_mode=async_mode,
-            )
+            if use_async:
+                engine = create_async_engine(url=str(db_url), **(engine_kwargs or {}))
+            else:
+                engine = create_engine(url=str(db_url), **(engine_kwargs or {}))
+
+        import pickle
+
+        from ..storage.sql_docstore import SQLStore
+
+
+        record_manager = SQLRecordManager(
+            namespace=namespace,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            async_mode=use_async,
+        )
+        sql_docstore = SQLStore(
+            namespace=namespace,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            async_mode=use_async,
+        )
+        if not use_async:
             record_manager.create_schema()
-            # This implementation is not correct now.
-            # from langchain_community.storage.sql import SQLBaseStore
-            # docstore = SQLBaseStore[Union[Document, List[str]]](
-            #     collection_name=namespace,
-            #     connection_string=db_url,
-            # )
-            import pickle
-
-            from ..storage.sql_docstore import SQLStore
-
-            sql_docstore = SQLStore(
-                namespace=namespace, db_url=db_url, async_mode=async_mode
-            )
             sql_docstore.create_schema()
-            docstore = EncoderBackedStore[str, Union[Document, List[str]]](
-                store=sql_docstore,
-                key_encoder=lambda x: x,
-                value_serializer=pickle.dumps,
-                value_deserializer=pickle.loads,
-            )
         else:
-            # Note: the PR https://github.com/langchain-ai/langchain/pull/15909
-            # is not compatible with "engine"
-            import pickle
 
-            from ..storage.sql_docstore import SQLStore
+            async def init():
+                print(f"debug init {threading.current_thread()}")
+                await record_manager.acreate_schema()
+                await sql_docstore.acreate_schema()
+                print(f"fin init {threading.current_thread()}")
 
-            record_manager = SQLRecordManager(
-                namespace=namespace,
-                engine=engine,
-                engine_kwargs=engine_kwargs,
-                async_mode=async_mode,
-            )
-            sql_docstore = SQLStore(
-                namespace=namespace,
-                engine=engine,
-                engine_kwargs=engine_kwargs,
-                async_mode=async_mode,
-            )
-            docstore = EncoderBackedStore[str, Union[Document, List[str]]](
-                store=sql_docstore,
-                key_encoder=lambda x: x,
-                value_serializer=pickle.dumps,
-                value_deserializer=pickle.loads,
-            )
-
-        vectorstore = RAGVectorStore(
+            try:
+                loop = asyncio.get_event_loop()
+                print(f"Trouve une loop {loop} {threading.current_thread()}")  # FIXME
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                print(f"Create une loop {loop}")  # FIXME
+                asyncio.set_event_loop(loop)
+            loop.run_until_complete(init())
+        docstore = EncoderBackedStore[str, Union[Document, List[str]]](
+            store=sql_docstore,
+            key_encoder=lambda x: x,
+            value_serializer=pickle.dumps,
+            value_deserializer=pickle.loads,
+        )
+        rag_vectorstore = RAGVectorStore(
             vectorstore=vectorstore,
             docstore=docstore,
             parent_transformer=parent_transformer,
             chunk_transformer=chunk_transformer,
             **kwargs,
         )
+
+        # Align all the sessions factories
+        # FIXME: Ajouter des TU pour les 2 scénarios
+        if use_async:
+            class async_local_sessionmanager(async_sessionmaker):
+                # Need a subclass of async_sessionmaker
+                def __init__(self):
+                    super().__init__(bind=None)
+
+                def __call__(self, **local_kw: Any) -> AsyncSession:
+                    # The default implementation, use an async_scoped_session
+                    # associated with the engine (and not with the connexion)
+                    session_factory = RAGVectorStore.update_async_session_factory(engine)
+
+                    return session_factory()
+
+            if not session_factory:
+                session_factory = async_local_sessionmanager()
+
+            record_manager.session_factory = session_factory
+            sql_docstore.session_factory = session_factory
+            if hasattr(vectorstore, "session_maker"):
+                vectorstore.session_maker = session_factory
+            if hasattr(vectorstore, "session_factory"):
+                vectorstore.session_factory = session_factory
+        else:
+            def local_session():
+                # The default implementation, use an async_scoped_session
+                # associated with the engine (and not with the connexion)
+                context = RAGVectorStore._thread_session_factory
+                if not hasattr(context, "sessionfactory"):
+                    context.sessionfactory = scoped_session(sessionmaker(bind=engine))
+                session = context.sessionfactory()
+                return session
+
+            if not session_factory:
+                # session_factory=scoped_session(sessionmaker(bind=engine))
+                session_factory = local_session
+
+            record_manager.session_factory = session_factory
+            sql_docstore.session_factory = session_factory
+            if hasattr(vectorstore, "session_maker"):
+                vectorstore.session_maker = session_factory
+            if hasattr(vectorstore, "session_factory"):
+                vectorstore.session_factory = session_factory
+
         return (
-            vectorstore,
+            rag_vectorstore,
             {
                 "record_manager": record_manager,
                 "vector_store": vectorstore,
                 "source_id_key": kwargs.get("source_id_key", "source"),
             },
-            record_manager,
-            sql_docstore,
         )
-
-    @staticmethod
-    def from_vs_in_sql(
-            vectorstore: VectorStore,
-            engine: Optional[Union[Engine, AsyncEngine]] = None,
-            engine_kwargs: Optional[Dict[str, Any]] = None,
-            db_url: Optional[str] = None,
-            namespace: str = "rag_vectorstore",
-            *,
-            chunk_transformer: Optional[BaseDocumentTransformer] = None,
-            parent_transformer: Optional[BaseDocumentTransformer] = None,
-            use_async: bool = False,
-            **kwargs: Any,
-    ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
-        async_mode = isinstance(engine, AsyncEngine)  # FIXME: peut etre none
-        (
-            vectorstore,
-            index_kwargs,
-            record_manager,
-            sql_docstore,
-        ) = RAGVectorStore._from_vs_in_sql(
-            vectorstore=vectorstore,
-            engine=engine,
-            engine_kwargs=engine_kwargs,
-            db_url=db_url,
-            namespace=namespace,
-            async_mode=async_mode,
-            chunk_transformer=chunk_transformer,
-            parent_transformer=parent_transformer,
-            **kwargs,
-        )
-
-        if async_mode:
-            import asyncio
-
-            async def create_schema():
-                await record_manager.acreate_schema()
-                await sql_docstore.acreate_schema()
-
-            asyncio.run(create_schema())
-        else:
-            record_manager.create_schema()
-            sql_docstore.create_schema()
-        return vectorstore, index_kwargs
-
-    @staticmethod
-    async def afrom_vs_in_sql(
-            vectorstore: VectorStore,
-            engine: Optional[Union[Engine, AsyncEngine]] = None,
-            engine_kwargs: Optional[Dict[str, Any]] = None,
-            db_url: Optional[str] = None,
-            namespace: str = "rag_vectorstore",
-            async_mode=False,
-            *,
-            chunk_transformer: Optional[BaseDocumentTransformer] = None,
-            parent_transformer: Optional[BaseDocumentTransformer] = None,
-            **kwargs: Any,
-    ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
-        async_mode = False
-        (
-            vectorstore,
-            index_kwargs,
-            record_manager,
-            sql_docstore,
-        ) = RAGVectorStore._from_vs_in_sql(
-            vectorstore=vectorstore,
-            engine=engine,
-            engine_kwargs=engine_kwargs,
-            db_url=db_url,
-            namespace=namespace,
-            async_mode=async_mode,
-            chunk_transformer=chunk_transformer,
-            parent_transformer=parent_transformer,
-            **kwargs,
-        )
-        await record_manager.create_schema()
-        await sql_docstore.create_schema()
-        return vectorstore, index_kwargs
