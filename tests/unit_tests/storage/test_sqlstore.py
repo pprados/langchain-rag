@@ -1,8 +1,9 @@
-from typing import Generator, cast
+from typing import AsyncGenerator, Generator, cast
 
 import pytest
 from langchain.storage._lc_store import create_kv_docstore, create_lc_store
 from langchain_core.documents import Document
+from langchain_core.stores import BaseStore
 
 from langchain_rag.storage.sql_docstore import SQLStore
 
@@ -14,11 +15,21 @@ def sql_store() -> Generator[SQLStore, None, None]:
     yield store
 
 
+@pytest.fixture
+async def async_sql_store() -> AsyncGenerator[SQLStore, None]:
+    store = SQLStore(namespace="test", db_url="sqlite+aiosqlite://", async_mode=True)
+    await store.acreate_schema()
+    yield store
+
+
 def test_create_lc_store(sql_store: SQLStore) -> None:
     """Test that a docstore is created from a base store."""
-    docstore = create_lc_store(sql_store)
+    docstore: BaseStore[str, Document] = cast(
+        BaseStore[str, Document], create_lc_store(sql_store)
+    )
     docstore.mset([("key1", Document(page_content="hello", metadata={"key": "value"}))])
-    fetched_doc = cast(Document, docstore.mget(["key1"])[0])
+    fetched_doc = docstore.mget(["key1"])[0]
+    assert fetched_doc is not None
     assert fetched_doc.page_content == "hello"
     assert fetched_doc.metadata == {"key": "value"}
 
@@ -33,15 +44,22 @@ def test_create_kv_store(sql_store: SQLStore) -> None:
     assert fetched_doc.metadata == {"key": "value"}
 
 
-def test_sample_sql_docstore() -> None:
-    # Instantiate the SQLStore with the root path
-    sql_store = SQLStore(namespace="test", db_url="sqlite://")
-    # sql_store = SQLStore[str, Any](namespace="test", db_url="sqlite:////tmp/test.db")
-    sql_store.create_schema()
+@pytest.mark.asyncio
+async def test_async_create_kv_store(async_sql_store: SQLStore) -> None:
+    """Test that a docstore is created from a base store."""
+    docstore = create_kv_docstore(async_sql_store)
+    await docstore.amset(
+        [("key1", Document(page_content="hello", metadata={"key": "value"}))]
+    )
+    fetched_doc = (await docstore.amget(["key1"]))[0]
+    assert isinstance(fetched_doc, Document)
+    assert fetched_doc.page_content == "hello"
+    assert fetched_doc.metadata == {"key": "value"}
 
+
+def test_sample_sql_docstore(sql_store: SQLStore) -> None:
     # Set values for keys
     sql_store.mset([("key1", b"value1"), ("key2", b"value2")])
-    # sql_store.mset([("key1", "value1"), ("key2", "value2")])
 
     # Get values for keys
     values = sql_store.mget(["key1", "key2"])  # Returns [b"value1", b"value2"]
@@ -51,3 +69,21 @@ def test_sample_sql_docstore() -> None:
 
     # Iterate over keys
     assert [key for key in sql_store.yield_keys()] == ["key2"]
+
+
+@pytest.mark.asyncio
+async def test_async_sample_sql_docstore(async_sql_store: SQLStore) -> None:
+    # Set values for keys
+    await async_sql_store.amset([("key1", b"value1"), ("key2", b"value2")])
+    # sql_store.mset([("key1", "value1"), ("key2", "value2")])
+
+    # Get values for keys
+    values = await async_sql_store.amget(
+        ["key1", "key2"]
+    )  # Returns [b"value1", b"value2"]
+    assert values == [b"value1", b"value2"]
+    # Delete keys
+    await async_sql_store.amdelete(["key1"])
+
+    # Iterate over keys
+    assert [key async for key in async_sql_store.ayield_keys()] == ["key2"]

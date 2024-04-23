@@ -1,5 +1,13 @@
 import copy
-from typing import Any, AsyncIterator, Callable, Dict, Iterator, Optional
+from typing import (
+    Any,
+    AsyncGenerator,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Iterator,
+    Optional,
+)
 
 from langchain.chains import LLMChain
 from langchain.output_parsers import NumberedListOutputParser
@@ -60,9 +68,9 @@ class SummarizeTransformer(_RunnableGeneratorDocumentTransformer):
                 page_content="SUMMARY:\n" + str(output).strip(), metadata=metadata
             )
 
-    async def _alazy_transform_documents(  # type:ignore
+    async def _alazy_transform_documents(  # type: ignore
         self, documents: AsyncIterator[Document], **kwargs: Any
-    ) -> AsyncIterator[Document]:
+    ) -> AsyncGenerator[Document, None]:
         _callbacks = kwargs.get("callbacks", None)
         async for doc in documents:
             _input = self.get_input(doc)

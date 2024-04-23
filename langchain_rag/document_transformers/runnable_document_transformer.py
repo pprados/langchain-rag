@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import (
     TYPE_CHECKING,
     Any,
+    AsyncGenerator,
     AsyncIterator,
     Iterable,
     Iterator,
@@ -13,7 +14,6 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    no_type_check,
 )
 
 from langchain_core.documents import BaseDocumentTransformer, Document
@@ -143,10 +143,9 @@ class LazyDocumentTransformer(BaseDocumentTransformer):
     @abstractmethod
     async def _alazy_transform_documents(  # type: ignore
         self, documents: AsyncIterator[Document], **kwargs: Any
-    ) -> AsyncIterator[Document]:
-        raise NotImplementedError()
+    ) -> AsyncGenerator[Document, None]:
+        yield None  # type: ignore
 
-    @no_type_check  # Bug in Mypy
     async def alazy_transform_documents(
         self,
         documents: Input,
@@ -164,8 +163,10 @@ class LazyDocumentTransformer(BaseDocumentTransformer):
             async_documents = to_async_iterator(iter(documents))
         elif isinstance(documents, AsyncIterator):
             async_documents = documents
-        else:
+        elif isinstance(documents, Iterator):
             async_documents = to_async_iterator(documents)
+        else:
+            raise ValueError("Invalid input type")
 
         async for doc in self._alazy_transform_documents(async_documents):
             yield doc
