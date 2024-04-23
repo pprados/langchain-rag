@@ -8,14 +8,22 @@ from langchain_core.documents import Document
 from langchain_core.language_models import LLM, BaseLLM
 from langchain_core.pydantic_v1 import validator
 
+from langchain_rag.document_transformers import (
+    DocumentTransformerPipeline,
+    DocumentTransformers,
+)
 from langchain_rag.document_transformers.generate_questions import (
     GenerateQuestionsTransformer,
 )
-from langchain_rag.document_transformers.sumarize_and_questions_transformer import (
+from langchain_rag.document_transformers.summarize_and_questions_transformer import (
     SummarizeAndQuestionsTransformer,
 )
-from langchain_rag.document_transformers.sumarize_transformer import (
+from langchain_rag.document_transformers.summarize_transformer import (
     SummarizeTransformer,
+)
+from tests.unit_tests.documents.sample_transformer import (
+    LowerLazyTransformer,
+    UpperLazyTransformer,
 )
 
 TEMPERATURE = 0.0
@@ -579,3 +587,57 @@ async def test_sumarize_and_questions_transformer_alazy_transform_documents() ->
         doc async for doc in transformer.alazy_transform_documents(iter([doc1, doc2]))
     ]
     assert len(result) == 8
+
+
+# %%
+@pytest.mark.asyncio
+async def test_DocumentTransformerPipeline_alazy_transform_documents() -> None:
+    doc1 = Document(
+        page_content="""
+    Mathematics is an area of knowledge that includes the topics of numbers, formulas 
+    and related structures, shapes and the spaces in which they are contained, 
+    and quantities and their changes. 
+    """
+    )
+    doc2 = Document(
+        page_content="""
+    The history of mathematics deals with the origin of discoveries in mathematics and 
+    the mathematical methods and notation of the past.'
+    """
+    )
+    trans1 = LowerLazyTransformer()
+    trans2 = UpperLazyTransformer()
+    transformer = DocumentTransformerPipeline(
+        transformers=[trans1, trans2], batch_size=1
+    )
+    result = [
+        doc async for doc in transformer.alazy_transform_documents(iter([doc1, doc2]))
+    ]
+    assert len(result) == 2
+    assert result[0].page_content == doc1.page_content.lower()
+
+
+@pytest.mark.asyncio
+async def test_DocumentTransformers_alazy_transform_documents() -> None:
+    doc1 = Document(
+        page_content="""
+    Mathematics is an area of knowledge that includes the topics of numbers, formulas 
+    and related structures, shapes and the spaces in which they are contained, 
+    and quantities and their changes. 
+    """
+    )
+    doc2 = Document(
+        page_content="""
+    The history of mathematics deals with the origin of discoveries in mathematics and 
+    the mathematical methods and notation of the past.'
+    """
+    )
+    trans1 = LowerLazyTransformer()
+    trans2 = UpperLazyTransformer()
+    transformer = DocumentTransformers(transformers=[trans1, trans2], batch_size=100)
+    result = [
+        doc async for doc in transformer.alazy_transform_documents(iter([doc1, doc2]))
+    ]
+    assert len(result) == 4
+    assert result[0].page_content == doc1.page_content.lower()
+    assert result[2].page_content == doc1.page_content.upper()

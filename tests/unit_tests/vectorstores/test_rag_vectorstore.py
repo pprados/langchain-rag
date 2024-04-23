@@ -1035,9 +1035,7 @@ async def test_asimilarity_search_without_parent_transformer(
     # ----
     result = await vs.asimilarity_search("hello", k=2)
     # ----
-    from pprint import pprint  # FIXME
 
-    pprint(result)
     assert len(result) == 2
     assert result[0].page_content == "Hello word"
     assert result[1].page_content == "Hello langchain"
@@ -1633,7 +1631,7 @@ def test_from_vs_in_sql_with_db_url() -> None:
         vectorstore=fake_vs, db_url="sqlite://", namespace="fake"
     )
     assert index_params["source_id_key"] == "source"
-    assert index_params["vector_store"] == rag_vectorstore
+    assert index_params["vector_store"] == fake_vs
 
 
 def test_from_vs_in_sql_with_engine() -> None:
@@ -1645,4 +1643,4 @@ def test_from_vs_in_sql_with_engine() -> None:
         vectorstore=fake_vs, engine=create_engine("sqlite://"), namespace="fake"
     )
     assert index_params["source_id_key"] == "source"
-    assert index_params["vector_store"] == rag_vectorstore
+    assert index_params["vector_store"] == fake_vs

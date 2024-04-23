@@ -2,6 +2,8 @@ import contextlib
 from pathlib import Path
 from typing import (
     Any,
+    AsyncGenerator,
+    AsyncIterator,
     Dict,
     Generator,
     Iterator,
@@ -9,19 +11,19 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Union, AsyncGenerator,
+    Union,
 )
 
-import sqlalchemy
-from langchain_core.stores import BaseStore, K, V
+from langchain_core.stores import BaseStore, V
 from sqlalchemy import (
     Column,
     Engine,
     PickleType,
     and_,
     create_engine,
+    delete,
+    select,
 )
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -33,7 +35,6 @@ from sqlalchemy.orm import (
     Session,
     declarative_base,
     mapped_column,
-    scoped_session,
     sessionmaker,
 )
 
@@ -105,16 +106,14 @@ class SQLStore(BaseStore[str, bytes]):
             raise ValueError("Must specify either db_url or engine, not both")
 
         _engine: Union[Engine, AsyncEngine]
-        echo = True # FIXME: SQL echo is true
         if db_url:
             if async_mode:
-                _engine = create_async_engine(url=str(db_url),
-                                              echo=echo
-                                              **(engine_kwargs or {}),)
+                _engine = create_async_engine(
+                    url=str(db_url),
+                    **(engine_kwargs or {}),
+                )
             else:
-                _engine = create_engine(url=str(db_url),
-                                        echo=echo,
-                                        **(engine_kwargs or {}))
+                _engine = create_engine(url=str(db_url), **(engine_kwargs or {}))
         elif engine:
             _engine = engine
 
@@ -136,115 +135,91 @@ class SQLStore(BaseStore[str, bytes]):
         Base.metadata.create_all(self.engine)
 
     async def acreate_schema(self) -> None:
+        assert isinstance(self.engine, AsyncEngine)
         async with self.engine.begin() as session:
             await session.run_sync(Base.metadata.create_all)
 
     def drop(self) -> None:
         Base.metadata.drop_all(bind=self.engine.connect())
 
-    async def amget(self, keys: Sequence[K]) -> List[Optional[V]]:
-        result = {}
-        # async with self.engine.connect() as conn:
-        #     result = await conn.execute(select(Value).filter(and_(
-        #                         Value.key.in_(keys),
-        #                         Value.namespace == self.namespace,
-        #                     )))
-        #     print(result.fetchall())
-        async with self.engine.connect() as conn:
-        # async with self._amake_session() as session:
-        #     async with session.begin() as conn:
-            if True:
-                sql_result = await conn.execute(
-                    select(Value).filter(and_(
+    async def amget(self, keys: Sequence[str]) -> List[Optional[V]]:
+        assert isinstance(self.engine, AsyncEngine)
+        result: Dict[str, V] = {}
+        async with self._amake_session() as session:
+            stmt = select(Value).filter(
+                and_(
                     Value.key.in_(keys),
                     Value.namespace == self.namespace,
-                )))
-                data=sql_result.fetchall()
-                for v in data:
-                    result[v.key] = v.value  # FIXME: voir plus loin le code
-                # async for v in conn.execute(
-                #     select(Value).filter(and_(
-                #         Value.key.in_(keys),
-                #         Value.namespace == self.namespace,
-                #     ))
-                # ):
-                #     result[v.key] = v.value
-                # q = session.select(Value)
-                # result = await session.execute(q)
-                # curr = result.scalars()
-                #
-                # async for v in session.aquery(Value).filter(
-                #     and_(
-                #         Value.key.in_(keys),
-                #         Value.namespace == self.namespace,
-                #     )
-                # ):
-                #     result[v.key] = v.value
+                )
+            )
+            for v in await session.scalars(stmt):
+                result[v.key] = v.value
         return [result.get(key) for key in keys]
 
     def mget(self, keys: Sequence[str]) -> List[Optional[bytes]]:
         result = {}
 
         with self._make_session() as session:
-            for v in session.query(Value).filter(  # type: ignore
+            stmt = select(Value).filter(
                 and_(
                     Value.key.in_(keys),
                     Value.namespace == self.namespace,
                 )
-            ):
+            )
+            for v in session.scalars(stmt):
                 result[v.key] = v.value
         return [result.get(key) for key in keys]
 
-    async def amset(self, key_value_pairs: Sequence[Tuple[K, V]]) -> None:
+    async def amset(self, key_value_pairs: Sequence[Tuple[str, V]]) -> None:
         async with self._amake_session() as session:
-            async with session.begin():
-                # await self._amdetete([key for key, _ in key_value_pairs], session)
-                session.add_all(
-                    [
-                        Value(namespace=self.namespace, key=k, value=v)
-                        for k, v in key_value_pairs
-                    ]
-                )
-                session.commit()
+            await self._amdelete([key for key, _ in key_value_pairs], session)
+            session.add_all(
+                [
+                    Value(namespace=self.namespace, key=k, value=v)
+                    for k, v in key_value_pairs
+                ]
+            )
+            await session.commit()
 
     def mset(self, key_value_pairs: Sequence[Tuple[str, bytes]]) -> None:
-        # try:
         values: Dict[str, bytes] = dict(key_value_pairs)
-        with self._amake_session() as session:
-            self._mdetete(list(values.keys()), session)
+        with self._make_session() as session:
+            self._mdelete(list(values.keys()), session)
             session.add_all(
                 [
                     Value(namespace=self.namespace, key=k, value=v)
                     for k, v in values.items()
                 ]
             )
+            session.commit()
 
-    def _mdetete(self, keys: Sequence[str], session: Session) -> None:
-        with session.begin():
-            session.query(Value).filter(  # type: ignore
-                and_(
-                    Value.key.in_(keys),
-                    Value.namespace == self.namespace,
-                )
-            ).delete()
+    def _mdelete(self, keys: Sequence[str], session: Session) -> None:
+        stmt = delete(Value).filter(
+            and_(
+                Value.key.in_(keys),
+                Value.namespace == self.namespace,
+            )
+        )
+        session.execute(stmt)
 
-    # async def _amdetete(self, keys: Sequence[str], session: Session) -> None:
-    #     await session.query(Value).filter(
-    #         and_(
-    #             Value.key.in_(keys),
-    #             Value.namespace == self.namespace,
-    #         )
-    #     ).delete()
+    async def _amdelete(self, keys: Sequence[str], session: AsyncSession) -> None:
+        stmt = delete(Value).filter(
+            and_(
+                Value.key.in_(keys),
+                Value.namespace == self.namespace,
+            )
+        )
+        await session.execute(stmt)
 
     def mdelete(self, keys: Sequence[str]) -> None:
         with self._make_session() as session:
-            self._mdetete(keys, session)
+            self._mdelete(keys, session)
             session.commit()
 
-    # async def amdelete(self, keys: Sequence[str]) -> None:
-    #     with self._make_session() as session:
-    #         await self._mdelete(keys, session)
-    #         session.commit()
+    async def amdelete(self, keys: Sequence[str]) -> None:
+        async with self._amake_session() as session:
+            await self._amdelete(keys, session)
+            await session.commit()
 
     def yield_keys(self, *, prefix: Optional[str] = None) -> Iterator[str]:
         with self._make_session() as session:
@@ -254,6 +229,13 @@ class SQLStore(BaseStore[str, bytes]):
                 yield str(v.key)
             session.close()
 
+    async def ayield_keys(self, *, prefix: Optional[str] = None) -> AsyncIterator[str]:
+        async with self._amake_session() as session:
+            stmt = select(Value).filter(Value.namespace == self.namespace)
+            for v in await session.scalars(stmt):
+                yield str(v.key)
+            await session.close()
+
     @contextlib.contextmanager
     def _make_session(self) -> Generator[Session, None, None]:
         """Create a session and close it after use."""
@@ -261,11 +243,7 @@ class SQLStore(BaseStore[str, bytes]):
         if isinstance(self.session_factory, async_sessionmaker):
             raise AssertionError("This method is not supported for async engines.")
 
-        session = scoped_session(self.session_factory)()
-        try:
-            yield session
-        finally:
-            session.commit()
+        yield self.session_factory()
 
     @contextlib.asynccontextmanager
     async def _amake_session(self) -> AsyncGenerator[AsyncSession, None]:

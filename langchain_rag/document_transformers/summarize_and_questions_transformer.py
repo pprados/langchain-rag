@@ -16,7 +16,9 @@ from langchain_core.documents import Document
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.prompts import PromptTemplate
-from langchain_core.pydantic_v1 import BaseModel
+
+# from langchain_core.pydantic_v1 import BaseModel
+from pydantic import BaseModel
 
 from langchain_rag.document_transformers.runnable_document_transformer import (
     _RunnableGeneratorDocumentTransformer,
