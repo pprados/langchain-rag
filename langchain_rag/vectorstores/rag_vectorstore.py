@@ -1,7 +1,9 @@
 import asyncio
 import concurrent
 import hashlib
+import logging
 import uuid
+from copy import copy
 from typing import (
     Any,
     Callable,
@@ -33,6 +35,8 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from .wrapper_vectorstore import WrapperVectorStore
+
+logger = logging.getLogger(__name__)
 
 # %%
 VST = TypeVar("VST", bound="VectorStore")
@@ -180,11 +184,44 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             reverse=True,
         )
 
+    async def _aupdate_score_of_chunk(
+        self, sub_chunks_and_score: List[Tuple[Document, float]]
+    ) -> List[Tuple[Document, float]]:
+        if not self.chunk_transformer:
+            return sub_chunks_and_score
+        ids = []
+        scores: Dict[str, float] = {}
+        key = self.chunk_id_key
+        for d, s in sub_chunks_and_score:
+            if d.metadata[key] not in ids:
+                id = d.metadata[key]
+                ids.append(id)
+                chunk_s = scores.get(id, 1.0)
+                scores[id] = min(chunk_s, s)
+        docs = cast(Sequence[Document], await self.docstore.amget(ids))
+        map_ids = {doc.metadata[key]: i for doc, i in zip(docs, ids) if doc}
+        return sorted(
+            [(d, scores[map_ids[d.metadata[key]]]) for d in docs if d is not None],
+            key=lambda x: x[1],
+            reverse=True,
+        )
+
     def _get_trunk_from_sub_docs_and_score(
         self, sub_docs_and_score: List[Tuple[Document, float]], k: int, **kwargs: Any
     ) -> List[Tuple[Document, float]]:
         if self.chunk_transformer:
             result = self._update_score_of_chunk(sub_docs_and_score)
+        else:
+            result = sub_docs_and_score
+        if self.search_kwargs.get("k", k) < k:
+            raise ValueError("The search_kwargs['k'] must be >= 'k'")
+        return result[:k]
+
+    async def _aget_trunk_from_sub_docs_and_score(
+        self, sub_docs_and_score: List[Tuple[Document, float]], k: int, **kwargs: Any
+    ) -> List[Tuple[Document, float]]:
+        if self.chunk_transformer:
+            result = await self._aupdate_score_of_chunk(sub_docs_and_score)
         else:
             result = sub_docs_and_score
         if self.search_kwargs.get("k", k) < k:
@@ -623,7 +660,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs_and_score = await self.vectorstore.asimilarity_search_with_score(
             query=query, **_search_kwargs
         )
-        return self._get_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
+        return await self._aget_trunk_from_sub_docs_and_score(subdocs_and_score, k=k)
 
     def similarity_search_with_relevance_scores(
         self,
@@ -646,7 +683,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 query=query, **_search_kwargs
             )
         )
-        return self._update_score_of_chunk(subdocs_and_score)[:k]
+        return (await self._aupdate_score_of_chunk(subdocs_and_score))[:k]
 
     def similarity_search_by_vector(
         self, embedding: List[float], k: int = 4, **kwargs: Any
@@ -839,3 +876,36 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 "source_id_key": kwargs.get("source_id_key", "source"),
             },
         )
+
+    @staticmethod
+    def copy_with_session_maker(
+        session_maker: Any,
+        rag_vectorstore: "RAGVectorStore",
+        index_kwargs: Dict[str, Any],
+    ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
+        """Duplicate the RAGVectorStore and index_kwargs with a new session_maker."""
+        assert isinstance(rag_vectorstore, RAGVectorStore)
+        new_rag_vectorstore = copy(rag_vectorstore)
+        new_rag_vectorstore.docstore = copy(rag_vectorstore.docstore)
+        new_rag_vectorstore.vectorstore = copy(rag_vectorstore.vectorstore)
+
+        if hasattr(new_rag_vectorstore.docstore, "session_factory"):
+            new_rag_vectorstore.docstore.session_factory = session_maker
+
+        if hasattr(new_rag_vectorstore.vectorstore, "session_factory"):
+            new_rag_vectorstore.vectorstore.session_factory = session_maker
+        elif hasattr(new_rag_vectorstore.vectorstore, "session_maker"):
+            new_rag_vectorstore.vectorstore.session_maker = session_maker
+        else:
+            logger.warning(
+                "The vectorstore has no session_factory or session_maker attribute"
+            )
+
+        new_record_manager = copy(index_kwargs["record_manager"])
+        new_record_manager.session_factory = session_maker
+
+        return new_rag_vectorstore, {
+            "record_manager": new_record_manager,
+            "source_id_key": index_kwargs["source_id_key"],
+            "vector_store": new_rag_vectorstore,
+        }
