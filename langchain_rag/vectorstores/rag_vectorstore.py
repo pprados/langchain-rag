@@ -3,7 +3,9 @@ import concurrent
 import hashlib
 import logging
 import uuid
-from copy import copy
+from copy import copy, deepcopy
+
+# from langchain.storage import EncoderBackedStore
 from typing import (
     Any,
     Callable,
@@ -18,13 +20,13 @@ from typing import (
     cast,
 )
 
+from langchain.storage import EncoderBackedStore
 from langchain_core.documents import BaseDocumentTransformer, Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.pydantic_v1 import BaseModel, Extra, Field
 from langchain_core.stores import BaseStore
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from sqlalchemy import (
-    Connection,
     Engine,
     create_engine,
 )
@@ -32,7 +34,6 @@ from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     create_async_engine,
 )
-from sqlalchemy.orm import scoped_session, sessionmaker
 
 from .wrapper_vectorstore import WrapperVectorStore
 
@@ -372,6 +373,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             self.docstore.mset(mset_values)
             return ids
         else:
+            self.docstore.mset(full_chunk_docs)
             return chunk_ids
 
     async def aadd_documents(
@@ -538,6 +540,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                         chunk_doc.metadata[self.child_ids_key].split(",")
                     )
         if transformed_ids:
+            self.docstore.mdelete(ids)
             self.vectorstore.delete(ids=list(transformed_ids))
         elif self.parent_transformer:
             return self.vectorstore.delete(ids=chunk_by_doc_ids)
@@ -580,6 +583,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                         chunk_doc.metadata[self.child_ids_key].split(",")
                     )
         if transformed_ids:
+            await self.docstore.amdelete(ids)
             await self.vectorstore.adelete(ids=list(transformed_ids))
         elif self.parent_transformer:
             return await self.vectorstore.adelete(ids=chunk_by_doc_ids)
@@ -787,9 +791,6 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             },
         )
 
-    def session_maker(self, bind: Engine | Connection) -> scoped_session:
-        return scoped_session(sessionmaker(bind=bind))
-
     @staticmethod
     def from_vs_in_sql(
         vectorstore: VectorStore,
@@ -803,7 +804,6 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         parent_transformer: Optional[BaseDocumentTransformer] = None,
         **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
-        from langchain_rag.patch_langchain.storage import EncoderBackedStore
         from langchain_rag.patch_langchain_community.indexes._sql_record_manager import (  # noqa: E501
             SQLRecordManager,
         )
@@ -877,6 +877,52 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             },
         )
 
+    def __deepcopy__(self, memodict: Optional[dict[int, Any]] = {}) -> "RAGVectorStore":
+        new_rag_vectorstore = copy(self)
+        new_rag_vectorstore.docstore = copy(self.docstore)
+        new_rag_vectorstore.vectorstore = copy(self.vectorstore)
+        return new_rag_vectorstore
+
+    @property
+    def session_maker(self) -> Any:
+        if hasattr(self.docstore, "store"):
+            return self.docstore.store.session_factory
+        if hasattr(self.vectorstore, "session_factory"):
+            return self.vectorstore.session_factory
+        if hasattr(self.vectorstore, "session_maker"):
+            return self.vectorstore.session_maker
+        assert False, "Non session_maker detected"
+
+    def __setattr__(self, key: str, val: Any) -> None:
+        if key == "session_maker":
+            self._set_session_maker(val)
+        else:
+            super().__setattr__(key, val)
+
+    def _set_session_maker(self, session_maker: Any) -> None:
+        # Manage docstore
+        store = self.docstore
+        if hasattr(self.docstore, "store"):
+            store = self.docstore.store
+        if hasattr(store, "session_factory"):
+            store.session_factory = session_maker
+        elif hasattr(store, "session_maker"):
+            store.session_maker = session_maker
+        else:
+            logger.warning(
+                "The docstore has no session_factory or session_maker attribute"
+            )
+
+        # Manage vectorstore
+        if hasattr(self.vectorstore, "session_factory"):
+            self.vectorstore.session_factory = session_maker
+        elif hasattr(self.vectorstore, "session_maker"):
+            self.vectorstore.session_maker = session_maker
+        else:
+            logger.warning(
+                "The vectorstore has no session_factory or session_maker attribute"
+            )
+
     @staticmethod
     def copy_with_session_maker(
         session_maker: Any,
@@ -885,23 +931,11 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         """Duplicate the RAGVectorStore and index_kwargs with a new session_maker."""
         assert isinstance(rag_vectorstore, RAGVectorStore)
-        new_rag_vectorstore = copy(rag_vectorstore)
-        new_rag_vectorstore.docstore = copy(rag_vectorstore.docstore)
-        new_rag_vectorstore.vectorstore = copy(rag_vectorstore.vectorstore)
-
-        if hasattr(new_rag_vectorstore.docstore, "session_factory"):
-            new_rag_vectorstore.docstore.session_factory = session_maker
-
-        if hasattr(new_rag_vectorstore.vectorstore, "session_factory"):
-            new_rag_vectorstore.vectorstore.session_factory = session_maker
-        elif hasattr(new_rag_vectorstore.vectorstore, "session_maker"):
-            new_rag_vectorstore.vectorstore.session_maker = session_maker
-        else:
-            logger.warning(
-                "The vectorstore has no session_factory or session_maker attribute"
-            )
+        new_rag_vectorstore = deepcopy(rag_vectorstore)
+        new_rag_vectorstore.session_maker = session_maker  # type: ignore
 
         new_record_manager = copy(index_kwargs["record_manager"])
+        # new_record_manager = index_kwargs["record_manager"]
         new_record_manager.session_factory = session_maker
 
         return new_rag_vectorstore, {

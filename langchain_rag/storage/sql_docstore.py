@@ -27,6 +27,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
+    async_scoped_session,
     async_sessionmaker,
     create_async_engine,
 )
@@ -240,7 +241,7 @@ class SQLStore(BaseStore[str, bytes]):
     def _make_session(self) -> Generator[Session, None, None]:
         """Create a session and close it after use."""
 
-        if isinstance(self.session_factory, async_sessionmaker):
+        if isinstance(self.session_factory, async_sessionmaker | async_scoped_session):
             raise AssertionError("This method is not supported for async engines.")
 
         yield self.session_factory()
@@ -249,7 +250,9 @@ class SQLStore(BaseStore[str, bytes]):
     async def _amake_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Create a session and close it after use."""
 
-        if not isinstance(self.session_factory, async_sessionmaker):
+        if not isinstance(
+            self.session_factory, async_sessionmaker | async_scoped_session
+        ):
             raise AssertionError("This method is not supported for sync engines.")
 
         async with self.session_factory() as session:
