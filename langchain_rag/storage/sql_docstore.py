@@ -12,13 +12,13 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    cast,
 )
 
-from langchain_core.stores import BaseStore, V
+from langchain_core.stores import BaseStore
 from sqlalchemy import (
-    Column,
     Engine,
-    PickleType,
+    LargeBinary,
     and_,
     create_engine,
     delete,
@@ -27,7 +27,6 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
-    async_scoped_session,
     async_sessionmaker,
     create_async_engine,
 )
@@ -46,19 +45,18 @@ def items_equal(x: Any, y: Any) -> bool:
     return x == y
 
 
-class Value(Base):  # type: ignore[valid-type,misc]
+class LangchainKeyValueStores(Base):  # type: ignore[valid-type,misc]
     """Table used to save values."""
 
     # ATTENTION:
     # Prior to modifying this table, please determine whether
     # we should create migrations for this table to make sure
     # users do not experience data loss.
-    __tablename__ = "docstore"
+    __tablename__ = "langchain_key_value_stores"
 
     namespace: Mapped[str] = mapped_column(primary_key=True, index=True, nullable=False)
     key: Mapped[str] = mapped_column(primary_key=True, index=True, nullable=False)
-    # value: Mapped[Any] = Column(type_=PickleType, index=False, nullable=False)
-    value: Any = Column("earthquake", PickleType(comparator=items_equal))
+    value = mapped_column(LargeBinary, index=False, nullable=False)
 
 
 # This is a fix of original SQLStore.
@@ -74,7 +72,7 @@ class SQLStore(BaseStore[str, bytes]):
             from langchain_rag.storage import SQLStore
 
             # Instantiate the SQLStore with the root path
-            sql_store = SQLStore(namespace="test", db_url="sqllite://:memory:")
+            sql_store = SQLStore(namespace="test", db_url="sqlite://:memory:")
 
             # Set values for keys
             sql_store.mset([("key1", b"value1"), ("key2", b"value2")])
@@ -98,7 +96,7 @@ class SQLStore(BaseStore[str, bytes]):
         db_url: Optional[Union[str, Path]] = None,
         engine: Optional[Union[Engine, AsyncEngine]] = None,
         engine_kwargs: Optional[Dict[str, Any]] = None,
-        async_mode: bool = False,
+        async_mode: Optional[bool] = None,
     ):
         if db_url is None and engine is None:
             raise ValueError("Must specify either db_url or engine")
@@ -108,6 +106,8 @@ class SQLStore(BaseStore[str, bytes]):
 
         _engine: Union[Engine, AsyncEngine]
         if db_url:
+            if async_mode is None:
+                async_mode = False
             if async_mode:
                 _engine = create_async_engine(
                     url=str(db_url),
@@ -121,15 +121,17 @@ class SQLStore(BaseStore[str, bytes]):
         else:
             raise AssertionError("Something went wrong with configuration of engine.")
 
-        _session_factory: Union[sessionmaker[Session], async_sessionmaker[AsyncSession]]
+        _session_maker: Union[sessionmaker[Session], async_sessionmaker[AsyncSession]]
         if isinstance(_engine, AsyncEngine):
-            _session_factory = async_sessionmaker(bind=_engine)
+            self.async_mode = True
+            _session_maker = async_sessionmaker(bind=_engine)
         else:
-            _session_factory = sessionmaker(bind=_engine)
+            self.async_mode = False
+            _session_maker = sessionmaker(bind=_engine)
 
         self.engine = _engine
         self.dialect = _engine.dialect.name
-        self.session_factory = _session_factory
+        self.session_maker = _session_maker
         self.namespace = namespace
 
     def create_schema(self) -> None:
@@ -143,14 +145,14 @@ class SQLStore(BaseStore[str, bytes]):
     def drop(self) -> None:
         Base.metadata.drop_all(bind=self.engine.connect())
 
-    async def amget(self, keys: Sequence[str]) -> List[Optional[V]]:
+    async def amget(self, keys: Sequence[str]) -> List[Optional[bytes]]:
         assert isinstance(self.engine, AsyncEngine)
-        result: Dict[str, V] = {}
-        async with self._amake_session() as session:
-            stmt = select(Value).filter(
+        result: Dict[str, bytes] = {}
+        async with self._make_async_session() as session:
+            stmt = select(LangchainKeyValueStores).filter(
                 and_(
-                    Value.key.in_(keys),
-                    Value.namespace == self.namespace,
+                    LangchainKeyValueStores.key.in_(keys),
+                    LangchainKeyValueStores.namespace == self.namespace,
                 )
             )
             for v in await session.scalars(stmt):
@@ -160,23 +162,23 @@ class SQLStore(BaseStore[str, bytes]):
     def mget(self, keys: Sequence[str]) -> List[Optional[bytes]]:
         result = {}
 
-        with self._make_session() as session:
-            stmt = select(Value).filter(
+        with self._make_sync_session() as session:
+            stmt = select(LangchainKeyValueStores).filter(
                 and_(
-                    Value.key.in_(keys),
-                    Value.namespace == self.namespace,
+                    LangchainKeyValueStores.key.in_(keys),
+                    LangchainKeyValueStores.namespace == self.namespace,
                 )
             )
             for v in session.scalars(stmt):
                 result[v.key] = v.value
         return [result.get(key) for key in keys]
 
-    async def amset(self, key_value_pairs: Sequence[Tuple[str, V]]) -> None:
-        async with self._amake_session() as session:
+    async def amset(self, key_value_pairs: Sequence[Tuple[str, bytes]]) -> None:
+        async with self._make_async_session() as session:
             await self._amdelete([key for key, _ in key_value_pairs], session)
             session.add_all(
                 [
-                    Value(namespace=self.namespace, key=k, value=v)
+                    LangchainKeyValueStores(namespace=self.namespace, key=k, value=v)
                     for k, v in key_value_pairs
                 ]
             )
@@ -184,76 +186,81 @@ class SQLStore(BaseStore[str, bytes]):
 
     def mset(self, key_value_pairs: Sequence[Tuple[str, bytes]]) -> None:
         values: Dict[str, bytes] = dict(key_value_pairs)
-        with self._make_session() as session:
+        with self._make_sync_session() as session:
             self._mdelete(list(values.keys()), session)
             session.add_all(
                 [
-                    Value(namespace=self.namespace, key=k, value=v)
+                    LangchainKeyValueStores(namespace=self.namespace, key=k, value=v)
                     for k, v in values.items()
                 ]
             )
             session.commit()
 
     def _mdelete(self, keys: Sequence[str], session: Session) -> None:
-        stmt = delete(Value).filter(
+        stmt = delete(LangchainKeyValueStores).filter(
             and_(
-                Value.key.in_(keys),
-                Value.namespace == self.namespace,
+                LangchainKeyValueStores.key.in_(keys),
+                LangchainKeyValueStores.namespace == self.namespace,
             )
         )
         session.execute(stmt)
 
     async def _amdelete(self, keys: Sequence[str], session: AsyncSession) -> None:
-        stmt = delete(Value).filter(
+        stmt = delete(LangchainKeyValueStores).filter(
             and_(
-                Value.key.in_(keys),
-                Value.namespace == self.namespace,
+                LangchainKeyValueStores.key.in_(keys),
+                LangchainKeyValueStores.namespace == self.namespace,
             )
         )
         await session.execute(stmt)
 
     def mdelete(self, keys: Sequence[str]) -> None:
-        with self._make_session() as session:
+        with self._make_sync_session() as session:
             self._mdelete(keys, session)
             session.commit()
 
     async def amdelete(self, keys: Sequence[str]) -> None:
-        async with self._amake_session() as session:
+        async with self._make_async_session() as session:
             await self._amdelete(keys, session)
             await session.commit()
 
     def yield_keys(self, *, prefix: Optional[str] = None) -> Iterator[str]:
-        with self._make_session() as session:
-            for v in session.query(Value).filter(  # type: ignore
-                Value.namespace == self.namespace
+        with self._make_sync_session() as session:
+            for v in session.query(LangchainKeyValueStores).filter(  # type: ignore
+                LangchainKeyValueStores.namespace == self.namespace
             ):
-                yield str(v.key)
+                if str(v.key).startswith(prefix or ""):
+                    yield str(v.key)
             session.close()
 
     async def ayield_keys(self, *, prefix: Optional[str] = None) -> AsyncIterator[str]:
-        async with self._amake_session() as session:
-            stmt = select(Value).filter(Value.namespace == self.namespace)
+        async with self._make_async_session() as session:
+            stmt = select(LangchainKeyValueStores).filter(
+                LangchainKeyValueStores.namespace == self.namespace
+            )
             for v in await session.scalars(stmt):
-                yield str(v.key)
+                if str(v.key).startswith(prefix or ""):
+                    yield str(v.key)
             await session.close()
 
     @contextlib.contextmanager
-    def _make_session(self) -> Generator[Session, None, None]:
-        """Create a session and close it after use."""
-
-        if isinstance(self.session_factory, async_sessionmaker | async_scoped_session):
-            raise AssertionError("This method is not supported for async engines.")
-
-        yield self.session_factory()
+    def _make_sync_session(self) -> Generator[Session, None, None]:
+        """Make an async session."""
+        if self.async_mode:
+            raise ValueError(
+                "Attempting to use a sync method in when async mode is turned on. "
+                "Please use the corresponding async method instead."
+            )
+        with cast(Session, self.session_maker()) as session:
+            yield cast(Session, session)
 
     @contextlib.asynccontextmanager
-    async def _amake_session(self) -> AsyncGenerator[AsyncSession, None]:
-        """Create a session and close it after use."""
-
-        if not isinstance(
-            self.session_factory, async_sessionmaker | async_scoped_session
-        ):
-            raise AssertionError("This method is not supported for sync engines.")
-
-        async with self.session_factory() as session:
-            yield session
+    async def _make_async_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Make an async session."""
+        if not self.async_mode:
+            raise ValueError(
+                "Attempting to use an async method in when sync mode is turned on. "
+                "Please use the corresponding async method instead."
+            )
+        async with cast(AsyncSession, self.session_maker()) as session:
+            yield cast(AsyncSession, session)

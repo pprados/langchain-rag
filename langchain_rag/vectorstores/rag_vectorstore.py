@@ -115,6 +115,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
     vectorstore: VectorStore
     """The real vectorstore for saving chunks"""
+
     docstore: BaseStore[str, Union[Document, List[str]]]
     """The storage layer for the parent documents"""
 
@@ -303,6 +304,8 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 chunk_documents = list(
                     self.parent_transformer.transform_documents(documents)
                 )
+            if not chunk_documents:
+                raise ValueError("The parent_transformer must generate documents")
         else:
             chunk_documents = documents
 
@@ -340,6 +343,11 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 ] = self.chunk_transformer.transform_documents(
                     [chunk_doc]
                 )  # PPR: transform multiple documents or one by one?
+                if not all_transformed_chunk:
+                    raise ValueError(
+                        "The chunk_transformer must generate documents or"
+                        " set chunk_transformer=None"
+                    )
                 # If in transformed chunk, add the id of the associated chunk
                 for transformed_chunk in all_transformed_chunk:
                     transformed_chunk.metadata[self.chunk_id_key] = chunk_id
