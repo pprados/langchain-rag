@@ -28,6 +28,7 @@ ipykernel = "*"
 jupyter = "^1.0"
 jupyterlab_rise = "^0.42"
 pre-commit = "^3.6"
+twine = "^5.1.0"
 
 [tool.poetry.group.test.dependencies]
 # The only dependencies that should be added are
