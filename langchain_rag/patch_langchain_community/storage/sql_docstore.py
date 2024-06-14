@@ -61,6 +61,8 @@ class LangchainKeyValueStores(Base):  # type: ignore[valid-type,misc]
 
 # This is a fix of original SQLStore.
 # This can will be removed when a PR will be merged.
+# https://github.com/langchain-ai/langchain/pull/22207
+# et release https://github.com/langchain-ai/langchain/releases/tag/langchain-community%3D%3D0.2.5
 class SQLStore(BaseStore[str, bytes]):
     """BaseStore interface that works on an SQL database.
 

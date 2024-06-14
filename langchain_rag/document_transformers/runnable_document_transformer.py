@@ -125,6 +125,20 @@ class LazyDocumentTransformer(BaseDocumentTransformer):
             async for doc in self.alazy_transform_documents(iter(documents), **kwargs)
         ]
 
+    def _doc_to_async_iterator(
+        self,
+        documents: Sequence[Document] | AsyncIterator[Document] | Iterator[Document],
+    ) -> AsyncIterator[Document]:
+        if isinstance(documents, Sequence):
+            async_documents = to_async_iterator(iter(documents))
+        elif isinstance(documents, AsyncIterator):
+            async_documents = documents
+        elif isinstance(documents, Iterator):
+            async_documents = to_async_iterator(documents)
+        else:
+            raise ValueError("Invalid input type")
+        return async_documents
+
     @abstractmethod
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any
@@ -158,14 +172,7 @@ class LazyDocumentTransformer(BaseDocumentTransformer):
         Returns:
             An iterator of transformed Documents.
         """
-        if isinstance(documents, Sequence):
-            async_documents = to_async_iterator(iter(documents))
-        elif isinstance(documents, AsyncIterator):
-            async_documents = documents
-        elif isinstance(documents, Iterator):
-            async_documents = to_async_iterator(documents)
-        else:
-            raise ValueError("Invalid input type")
+        async_documents = self._doc_to_async_iterator(documents)
 
         async for doc in self._alazy_transform_documents(async_documents):
             yield doc

@@ -5,7 +5,7 @@ from langchain.storage._lc_store import create_kv_docstore, create_lc_store
 from langchain_core.documents import Document
 from langchain_core.stores import BaseStore
 
-from langchain_rag.storage.sql_docstore import SQLStore
+from langchain_rag.patch_langchain_community.storage.sql_docstore import SQLStore
 
 
 @pytest.fixture

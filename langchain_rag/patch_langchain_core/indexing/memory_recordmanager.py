@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from langchain_community.indexes.base import RecordManager
 
 
+# FIXME: Attend de la validation de la PR https://github.com/langchain-ai/langchain/pull/13200
 class MemoryRecordManager(RecordManager):
     data: List[Dict[str, Any]] = []
 

@@ -164,6 +164,23 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         else:
             return result
 
+    async def _aget_trunk_from_sub_docs(
+        self, sub_docs: List[Document], **kwargs: Any
+    ) -> List[Document]:
+        if self.chunk_transformer:
+            ids = []
+            for d in sub_docs:
+                if d.metadata[self.chunk_id_key] not in ids:
+                    ids.append(d.metadata[self.chunk_id_key])
+            docs = cast(List[Document], await self.docstore.amget(ids))
+            result = [d for d in docs if d is not None]
+        else:
+            result = sub_docs
+        if "k" in kwargs:
+            return result[: kwargs["k"]]
+        else:
+            return result
+
     def _update_score_of_chunk(
         self, sub_chunks_and_score: List[Tuple[Document, float]]
     ) -> List[Tuple[Document, float]]:
@@ -634,7 +651,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         subdocs = await self.vectorstore.asearch(
             query=query, search_type=search_type, **_search_kwargs
         )
-        return self._get_trunk_from_sub_docs(subdocs, **kwargs)
+        return await self._aget_trunk_from_sub_docs(subdocs, **kwargs)
 
     def similarity_search(
         self, query: str, k: int = 4, **kwargs: Any
@@ -779,7 +796,9 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.storage import InMemoryStore
 
-        from ..indexes.memory_recordmanager import MemoryRecordManager
+        from ..patch_langchain_core.indexing.memory_recordmanager import (
+            MemoryRecordManager,
+        )
 
         record_manager = MemoryRecordManager(namespace="in-memory")
         docstore = InMemoryStore()
@@ -812,9 +831,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         parent_transformer: Optional[BaseDocumentTransformer] = None,
         **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
-        from langchain_rag.patch_langchain_community.indexes._sql_record_manager import (  # noqa: E501
-            SQLRecordManager,
-        )
+        from langchain_community.indexes._sql_record_manager import SQLRecordManager
 
         if isinstance(engine, AsyncEngine):
             assert (
@@ -836,7 +853,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         import pickle
 
-        from ..storage.sql_docstore import SQLStore
+        from ..patch_langchain_community.storage.sql_docstore import SQLStore
 
         record_manager = SQLRecordManager(
             namespace=namespace,
