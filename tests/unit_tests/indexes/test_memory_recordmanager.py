@@ -4,7 +4,7 @@ from typing import List
 import pytest
 from langchain_core.embeddings import Embeddings
 
-from langchain_rag.patch_langchain_core.indexing import MemoryRecordManager
+from langchain_rag.patch_langchain_core.indexing import InMemoryRecordManager
 
 
 class _FakeEmbeddings(Embeddings):
@@ -74,7 +74,7 @@ class _FakeEmbeddings(Embeddings):
 
 
 def test_update_exist_list_keys() -> None:
-    record_manager = MemoryRecordManager(namespace="record_manager_cache")
+    record_manager = InMemoryRecordManager(namespace="record_manager_cache")
     keys = [
         "key1",
     ]
@@ -140,7 +140,7 @@ def test_update_exist_list_keys() -> None:
 
 @pytest.mark.asyncio
 async def test_aupdate_exist_list_keys() -> None:
-    record_manager = MemoryRecordManager(namespace="record_manager_cache")
+    record_manager = InMemoryRecordManager(namespace="record_manager_cache")
     keys = [
         "key1",
     ]

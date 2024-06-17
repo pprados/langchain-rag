@@ -1620,9 +1620,9 @@ def test_from_vs_in_memory() -> None:
     )
     assert index_params["source_id_key"] == "source"
     assert index_params["vector_store"] == rag_vectorstore
-    from langchain_rag.patch_langchain_core.indexing import MemoryRecordManager
+    from langchain_rag.patch_langchain_core.indexing import InMemoryRecordManager
 
-    assert isinstance(index_params["record_manager"], MemoryRecordManager)
+    assert isinstance(index_params["record_manager"], InMemoryRecordManager)
 
 
 def test_from_vs_in_sql_with_db_url() -> None:

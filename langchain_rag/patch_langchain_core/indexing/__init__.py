@@ -1,3 +1,3 @@
-from .memory_recordmanager import MemoryRecordManager
+from .base import InMemoryRecordManager
 
-__all__ = ["MemoryRecordManager"]
+__all__ = ["InMemoryRecordManager"]
