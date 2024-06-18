@@ -853,7 +853,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         import pickle
 
-        from ..patch_langchain_community.storage.sql_docstore import SQLStore
+        from langchain_community.storage import SQLStore
 
         record_manager = SQLRecordManager(
             namespace=namespace,
