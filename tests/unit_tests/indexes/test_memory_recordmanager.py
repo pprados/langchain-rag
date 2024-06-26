@@ -3,8 +3,7 @@ from typing import List
 
 import pytest
 from langchain_core.embeddings import Embeddings
-
-from langchain_rag.patch_langchain_core.indexing import InMemoryRecordManager
+from langchain_core.indexing import InMemoryRecordManager
 
 
 class _FakeEmbeddings(Embeddings):

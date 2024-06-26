@@ -795,10 +795,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
         **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
         from langchain.storage import InMemoryStore
-
-        from ..patch_langchain_core.indexing import (
-            InMemoryRecordManager,
-        )
+        from langchain_core.indexing import InMemoryRecordManager
 
         record_manager = InMemoryRecordManager(namespace="in-memory")
         docstore = InMemoryStore()
