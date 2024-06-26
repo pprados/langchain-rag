@@ -31,6 +31,7 @@ jupyter = "^1.0"
 jupyterlab_rise = "^0.42"
 pre-commit = "^3.6"
 twine = "^5.1.0"
+importlib-metadata = "7.2.1"
 
 [tool.poetry.group.test.dependencies]
 # The only dependencies that should be added are
