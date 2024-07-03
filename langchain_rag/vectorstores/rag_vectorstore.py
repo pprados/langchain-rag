@@ -372,6 +372,9 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 transformed_persistance_ids = self.vectorstore.add_documents(
                     list(all_transformed_chunk)
                 )
+                transformed_persistance_ids = [
+                    str(id) for id in transformed_persistance_ids
+                ]
                 # Inject id of transformed ids in the chuck document
                 chunk_doc.metadata[self.child_ids_key] = ",".join(
                     transformed_persistance_ids
@@ -510,6 +513,9 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
                 transformed_persistance_ids = await self.vectorstore.aadd_documents(
                     list(all_transformed_chunk)
                 )
+                transformed_persistance_ids = [
+                    str(id) for id in transformed_persistance_ids
+                ]
                 # Inject id of transformed ids in the chuck document
                 chunk_doc.metadata[self.child_ids_key] = ",".join(
                     transformed_persistance_ids
