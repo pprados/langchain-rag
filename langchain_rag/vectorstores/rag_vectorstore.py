@@ -262,7 +262,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
     def add_documents(
         self,
-        documents: List[Document],
+        documents: Sequence[Document],
         *,
         ids: Optional[List[str]] = None,
         **kwargs: Any,
@@ -311,7 +311,7 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             if chunk_ids:
                 self.delete(ids=chunk_ids)
             ids = None
-
+        chunk_documents: Sequence[Document]
         if self.parent_transformer:
             if hasattr(self.parent_transformer, "lazy_transform_documents"):
                 chunk_documents = list(
@@ -352,7 +352,9 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
 
         full_chunk_docs = []
         if not self.chunk_transformer:
-            self.vectorstore.add_documents(documents=chunk_documents, ids=chunk_ids)
+            self.vectorstore.add_documents(
+                documents=list(chunk_documents), ids=chunk_ids
+            )
         else:
             for chunk_id, chunk_doc in zip(chunk_ids, chunk_documents):
                 all_transformed_chunk: Sequence[
