@@ -22,7 +22,8 @@ The challenge lies in correctly managing the lifecycle of the three levels of do
 The `RAGVectorStore`, in combination with other components, is designed to address this challenge.
 
 # Demo
-Read [this notebook](docs/integrations/vectorstores/rag_vectorstore.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/pprados/langchain-rag/blob/master/docs/integrations/vectorstores/rag_vectorstore.ipynb)
+
 Or :
 - `poetry run python -m ipykernel install --user --name langchain-rag`
 - `jupyter lab`
