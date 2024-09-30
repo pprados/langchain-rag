@@ -4,12 +4,12 @@ from typing import Any, AsyncIterator, Iterator
 # Note: Import directly from langchain_core is not stable and generate some errors
 from langchain_core.documents import Document
 
-from .runnable_document_transformer import (
-    _RunnableGeneratorDocumentTransformer,
+from .lazy_document_transformer import (
+    LazyDocumentTransformer,
 )
 
 
-class CopyDocumentTransformer(_RunnableGeneratorDocumentTransformer):
+class CopyDocumentTransformer(LazyDocumentTransformer):
     """
     This class is a transparent transformation. The input is just sent back to
     the output.

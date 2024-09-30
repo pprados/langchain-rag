@@ -29,14 +29,33 @@ from .sample_transformer import LowerLazyTransformer, UpperLazyTransformer
 VST = TypeVar("VST", bound="VectorStore")
 
 
-class FakeUUID:
+class FakeUUIDFactory:
+    class FakeUUID:
+        def __init__(self, s: str):
+            self.s = s
+
+        def __str__(self) -> str:
+            return self.s
+
+        def __eq__(self, other: Any) -> bool:
+            if isinstance(other, FakeUUIDFactory.FakeUUID):
+                return self.s == other.s
+            return NotImplemented
+
+        def __hash__(self) -> int:
+            return hash(self.s)
+
+        @property
+        def hex(self) -> str:
+            return self.s
+
     def __init__(self, prefix: str):
-        self.uuid_count = 0
+        self.uuid_count: int = 0
         self.prefix = prefix
 
-    def __call__(self) -> str:
+    def __call__(self) -> FakeUUID:
         self.uuid_count += 1
-        return f"{self.prefix}{self.uuid_count:0>2}"
+        return FakeUUIDFactory.FakeUUID(f"{self.prefix}{self.uuid_count:0>2}")
 
 
 def _must_be_called(
@@ -60,14 +79,14 @@ class FakeVectorStore(VectorStore):
     """Simulation of a vectorstore (without embedding)"""
 
     def __init__(self) -> None:
-        self.uuid = FakeUUID(prefix="Fake-VS-")
+        self.uuid = FakeUUIDFactory(prefix="Fake-VS-")
         self.docs: Dict[str, List[Document]] = {}
 
     def add_documents(self, documents: List[Document], **kwargs: Any) -> List[str]:
         print(f"add_documents({documents=},{kwargs=})")
         uuids = []
         for doc in documents:
-            uuid = self.uuid()
+            uuid = str(self.uuid())
             for word in doc.page_content.split(" "):
                 word = word.lower()
                 list_of_doc = self.docs.get(word, [])
@@ -180,7 +199,7 @@ chunk_transformer = DocumentTransformers(
     transformers=[
         UpperLazyTransformer(),
         LowerLazyTransformer(),
-    ]
+    ],
 )
 
 
@@ -198,7 +217,7 @@ def test_parent_and_chunk_transformer(mocker: MockerFixture) -> None:
     spy_add_documents = mocker.spy(fake_vs, "add_documents")
     spy_delete = mocker.spy(fake_vs, "delete")
     mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
+    mock_uuid4.side_effect = FakeUUIDFactory("chunk-")
 
     vs = RAGVectorStore(
         vectorstore=fake_vs,
@@ -294,7 +313,7 @@ def test_parent_and_chunk_tranformer_childid(mocker: MockerFixture) -> None:
     spy_add_documents = mocker.spy(fake_vs, "add_documents")
     spy_delete = mocker.spy(fake_vs, "delete")
     mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
+    mock_uuid4.side_effect = FakeUUIDFactory("chunk-")
 
     vs = RAGVectorStore(
         vectorstore=fake_vs,
@@ -383,9 +402,9 @@ def test_parent_and_chunk_transformer_ids(mocker: MockerFixture) -> None:
     spy_add_documents = mocker.spy(fake_vs, "add_documents")
     spy_delete = mocker.spy(fake_vs, "delete")
     mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
+    mock_uuid4.side_effect = FakeUUIDFactory("chunk-")
 
-    fake_uuid = FakeUUID(prefix="persistance-")
+    fake_uuid = FakeUUIDFactory(prefix="persistance-")
     vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=parent_transformer,
@@ -395,7 +414,7 @@ def test_parent_and_chunk_transformer_ids(mocker: MockerFixture) -> None:
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
-    force_ids = [fake_uuid(), fake_uuid()]
+    force_ids = [str(fake_uuid()), str(fake_uuid())]
 
     # ----
     ids = vs.add_documents([doc1, doc2], ids=force_ids)
@@ -471,7 +490,7 @@ def test_chunk_transformer(mocker: MockerFixture) -> None:
     spy_add_documents = mocker.spy(fake_vs, "add_documents")
     spy_delete = mocker.spy(fake_vs, "delete")
     mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
+    mock_uuid4.side_effect = FakeUUIDFactory("chunk-")
 
     vs = RAGVectorStore(
         vectorstore=fake_vs,
@@ -556,9 +575,9 @@ def test_chunk_transformer_ids(mocker: MockerFixture) -> None:
     spy_add_documents = mocker.spy(fake_vs, "add_documents")
     spy_delete = mocker.spy(fake_vs, "delete")
     mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
+    mock_uuid4.side_effect = FakeUUIDFactory("chunk-")
 
-    fake_uuid = FakeUUID(prefix="persistance-")
+    fake_uuid = FakeUUIDFactory(prefix="persistance-")
     vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,  # No parent transformer.
@@ -569,7 +588,7 @@ def test_chunk_transformer_ids(mocker: MockerFixture) -> None:
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     split_docs = parent_transformer.split_documents([doc1, doc2])
-    force_ids = [fake_uuid() for _ in range(0, len(split_docs))]
+    force_ids = [str(fake_uuid()) for _ in range(0, len(split_docs))]
     # ----
     ids = vs.add_documents(documents=split_docs, ids=force_ids)
     result = vs.as_retriever().get_relevant_documents(doc1.page_content)
@@ -644,7 +663,7 @@ def test_parent_transformer(mocker: MockerFixture) -> None:
     spy_add_documents = mocker.spy(fake_vs, "add_documents")
     spy_delete = mocker.spy(fake_vs, "delete")
     mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
+    mock_uuid4.side_effect = FakeUUIDFactory("chunk-")
 
     vs = RAGVectorStore(
         vectorstore=fake_vs,
@@ -732,9 +751,9 @@ def test_parent_transformer_ids(mocker: MockerFixture) -> None:
     spy_add_documents = mocker.spy(fake_vs, "add_documents")
     spy_delete = mocker.spy(fake_vs, "delete")
     mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
+    mock_uuid4.side_effect = FakeUUIDFactory("chunk-")
 
-    fake_uuid = FakeUUID(prefix="persistance-")
+    fake_uuid = FakeUUIDFactory(prefix="persistance-")
     vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=parent_transformer,
@@ -745,7 +764,7 @@ def test_parent_transformer_ids(mocker: MockerFixture) -> None:
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     docs = [doc1, doc2]
-    force_ids = [fake_uuid() for _ in range(0, len(docs))]
+    force_ids = [str(fake_uuid()) for _ in range(0, len(docs))]
     # ----
     ids = vs.add_documents(documents=docs, ids=force_ids)
     result = vs.as_retriever().get_relevant_documents(doc1.page_content)
@@ -815,7 +834,7 @@ def test_without_transformer(mocker: MockerFixture) -> None:
     spy_add_documents = mocker.spy(fake_vs, "add_documents")
     spy_delete = mocker.spy(fake_vs, "delete")
     mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
+    mock_uuid4.side_effect = FakeUUIDFactory("chunk-")
 
     vs = RAGVectorStore(
         vectorstore=fake_vs,
@@ -880,9 +899,9 @@ def test_without_transformer_ids(mocker: MockerFixture) -> None:
     spy_add_documents = mocker.spy(fake_vs, "add_documents")
     spy_delete = mocker.spy(fake_vs, "delete")
     mock_uuid4 = mocker.patch("uuid.uuid4")
-    mock_uuid4.side_effect = FakeUUID("chunk-")
+    mock_uuid4.side_effect = FakeUUIDFactory("chunk-")
 
-    fake_uuid = FakeUUID(prefix="persistance-")
+    fake_uuid = FakeUUIDFactory(prefix="persistance-")
     vs = RAGVectorStore(
         vectorstore=fake_vs,
         parent_transformer=None,  # No parent transformer.
@@ -893,7 +912,7 @@ def test_without_transformer_ids(mocker: MockerFixture) -> None:
     doc1 = Document(page_content="Hello word", metadata={"id": 1})
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     split_docs = parent_transformer.split_documents([doc1, doc2])
-    force_ids = [fake_uuid() for _ in range(0, len(split_docs))]
+    force_ids = [str(fake_uuid()) for _ in range(0, len(split_docs))]
     # ----
     ids = vs.add_documents(documents=split_docs, ids=force_ids)
     result = vs.as_retriever().get_relevant_documents(doc1.page_content)

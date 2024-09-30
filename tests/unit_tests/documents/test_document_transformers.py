@@ -3,12 +3,9 @@ from typing import Any, AsyncIterator, Iterator, Sequence
 import pytest
 from langchain_core.documents import Document
 
-from langchain_rag.document_transformers.document_transformers import (
-    _LEGACY,
-    DocumentTransformers,
-)
-from langchain_rag.document_transformers.runnable_document_transformer import (
-    _RunnableGeneratorDocumentTransformer,
+from langchain_rag.document_transformers import DocumentTransformers
+from langchain_rag.document_transformers.lazy_document_transformer import (
+    LazyDocumentTransformer,
 )
 
 from .sample_transformer import (
@@ -21,7 +18,7 @@ def by_pg(doc: Document) -> str:
     return doc.page_content
 
 
-class _SplitWords(_RunnableGeneratorDocumentTransformer):
+class _SplitWords(LazyDocumentTransformer):
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
@@ -37,7 +34,6 @@ class _SplitWords(_RunnableGeneratorDocumentTransformer):
                 yield Document(page_content=text, metadata=doc.metadata)
 
 
-@pytest.mark.skipif(not _LEGACY, reason="Test only runnable transformer")
 @pytest.mark.parametrize(
     "transformers",
     [
@@ -148,23 +144,3 @@ async def test_alazy_transform_documents(transformers: Sequence) -> None:
         ],
         key=by_pg,
     )
-
-
-def test_lcel_add_transform_documents() -> None:
-    """Test create documents method."""
-    x = UpperLazyTransformer()
-    assert len(((x + x) + x).transformers) == 3
-    assert len((x + (x + x)).transformers) == 3
-    assert len(((x + x) + (x + x)).transformers) == 4
-    assert len((x + x + x).transformers) == 3
-
-
-@pytest.mark.skipif(_LEGACY, reason="Test only runnable transformer")
-def test_lcel_add_mixte_transform_documents() -> None:
-    """Test create documents method."""
-    x = UpperLazyTransformer()
-    y = LowerLazyTransformer()
-    assert len((y + x).transformers) == 2
-    assert len((x + y).transformers) == 2
-    assert len(((x + x) + y).transformers) == 3
-    assert len((y + (x + x)).transformers) == 3

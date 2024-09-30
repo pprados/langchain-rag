@@ -20,8 +20,8 @@ from langchain_core.prompts import PromptTemplate
 # from langchain_core.pydantic_v1 import BaseModel
 from pydantic import BaseModel
 
-from langchain_rag.document_transformers.runnable_document_transformer import (
-    _RunnableGeneratorDocumentTransformer,
+from langchain_rag.document_transformers.lazy_document_transformer import (
+    LazyDocumentTransformer,
 )
 
 
@@ -65,12 +65,22 @@ def _get_default_chain_prompt() -> PromptTemplate:
     )
 
 
-class SummarizeAndQuestionsTransformer(_RunnableGeneratorDocumentTransformer):
+class SummarizeAndQuestionsTransformer(LazyDocumentTransformer):
     """Generate questions and summarize for each Documents."""
 
     llm_chain: LLMChain
     get_input: Callable[[Document], dict] = _default_get_input
     nb_of_questions: int = 3
+
+    def __init__(
+        self,
+        llm_chain: LLMChain,
+        get_input: Callable[[Document], dict] = _default_get_input,
+        nb_of_questions: int = 3,
+    ):
+        self.llm_chain = llm_chain
+        self.get_input = get_input
+        self.nb_of_questions = nb_of_questions
 
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any

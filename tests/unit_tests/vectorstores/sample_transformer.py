@@ -6,15 +6,16 @@ from typing import Any, AsyncIterator, Callable, Iterator
 
 from langchain_core.documents import Document
 
-from langchain_rag.document_transformers.runnable_document_transformer import (
-    _RunnableGeneratorDocumentTransformer,
+from langchain_rag.document_transformers.lazy_document_transformer import (
+    LazyDocumentTransformer,
 )
 
 
-class _LazyTransformer(_RunnableGeneratorDocumentTransformer):
+class _LazyTransformer(LazyDocumentTransformer):
     """Implementation of a runnable transformer, with lazy transformation"""
 
-    fn: Callable[[Any], str]
+    def __init__(self, fn: Callable[[Any], str]):
+        self.fn = fn
 
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any
@@ -38,10 +39,10 @@ class _LazyTransformer(_RunnableGeneratorDocumentTransformer):
 
 
 class LowerLazyTransformer(_LazyTransformer):
-    def __init__(self, **kwargs: Any):
-        super().__init__(fn=str.lower, **kwargs)
+    def __init__(self) -> None:
+        super().__init__(fn=str.lower)
 
 
 class UpperLazyTransformer(_LazyTransformer):
-    def __init__(self, **kwargs: Any):
-        super().__init__(fn=str.upper, **kwargs)
+    def __init__(self) -> None:
+        super().__init__(fn=str.upper)

@@ -15,8 +15,8 @@ from langchain_core.language_models import BaseLanguageModel
 from langchain_core.output_parsers import BaseOutputParser, NumberedListOutputParser
 from langchain_core.prompts import PromptTemplate
 
-from langchain_rag.document_transformers.runnable_document_transformer import (
-    _RunnableGeneratorDocumentTransformer,
+from langchain_rag.document_transformers.lazy_document_transformer import (
+    LazyDocumentTransformer,
 )
 
 
@@ -48,14 +48,22 @@ def _get_default_chain_prompt() -> PromptTemplate:
     )
 
 
-class GenerateQuestionsTransformer(_RunnableGeneratorDocumentTransformer):
+class GenerateQuestionsTransformer(LazyDocumentTransformer):
     """Generate questions for each Documents."""
 
     llm_chain: LLMChain
     get_input: Callable[[Document], dict] = _default_get_input
     nb_of_questions: int = 3
 
-    """Callable for constructing the chain input from the query and a Document."""
+    def __init__(
+        self,
+        llm_chain: LLMChain,
+        get_input: Callable[[Document], dict] = _default_get_input,
+        nb_of_questions: int = 3,
+    ):
+        self.llm_chain = llm_chain
+        self.get_input = get_input
+        self.nb_of_questions = nb_of_questions
 
     def lazy_transform_documents(
         self, documents: Iterator[Document], **kwargs: Any

@@ -4,21 +4,22 @@ from typing import Any, AsyncIterator, Iterator, Sequence, cast
 from langchain_core.documents import BaseDocumentTransformer, Document
 
 from .document_transformers import BATCH_SIZE, async_batched
-from .runnable_document_transformer import (
-    _RunnableGeneratorDocumentTransformer,
+from .lazy_document_transformer import (
+    LazyDocumentTransformer,
 )
 
 
-class DocumentTransformerPipeline(_RunnableGeneratorDocumentTransformer):
-    class Config:
-        arbitrary_types_allowed = True
+class DocumentTransformerPipeline(LazyDocumentTransformer):
 
-    transformers: Sequence[BaseDocumentTransformer]
-    batch_size: int = BATCH_SIZE
     """List of document transformers that are chained together and run in sequence."""
 
-    # def __init__(self, transformers: Sequence[BaseDocumentTransformer]):
-    #     self.transformers = transformers
+    def __init__(
+        self,
+        transformers: Sequence[BaseDocumentTransformer],
+        batch_size: int = BATCH_SIZE,
+    ):
+        self.transformers = transformers
+        self.batch_size = batch_size
 
     def _lazy_transform_documents_with_transformer(
         self,

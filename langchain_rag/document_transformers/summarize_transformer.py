@@ -15,8 +15,8 @@ from langchain_core.documents import Document
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.prompts import PromptTemplate
 
-from langchain_rag.document_transformers.runnable_document_transformer import (
-    _RunnableGeneratorDocumentTransformer,
+from langchain_rag.document_transformers.lazy_document_transformer import (
+    LazyDocumentTransformer,
 )
 
 
@@ -43,7 +43,7 @@ def _get_default_chain_prompt() -> PromptTemplate:
     )
 
 
-class SummarizeTransformer(_RunnableGeneratorDocumentTransformer):
+class SummarizeTransformer(LazyDocumentTransformer):
     """Generate questions for each Documents."""
 
     llm_chain: LLMChain
@@ -100,3 +100,11 @@ class SummarizeTransformer(_RunnableGeneratorDocumentTransformer):
             **(llm_chain_kwargs or {}),
         )
         return cls(llm_chain=llm_chain, get_input=_get_input)
+
+    def __init__(
+        self,
+        llm_chain: LLMChain,
+        get_input: Callable[[Document], Dict[str, Any]] = _default_get_input,
+    ):
+        self.llm_chain = llm_chain
+        self.get_input = get_input

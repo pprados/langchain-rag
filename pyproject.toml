@@ -14,9 +14,9 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
-langchain-core = ">=0.2.10"
-langchain-community = ">=0.2.5"
-langchain = ">=0.2.4"
+langchain-core = ">=0.3.0"
+langchain-community = ">=0.3.0"
+langchain = ">=0.3.0"
 jupyter = "^1.0.0"
 
 [tool.poetry.group.dev]
@@ -52,7 +52,7 @@ chromadb = "^0.4.10"
 aiosqlite = "*"
 pgvector = "*"
 psycopg2-binary = "*"
-langchain_openai = "^0.1.7"
+langchain_openai = "^0.2"
 #langchain-qa_with_references = { path = "../langchain-qa_with_references", develop = true }
 #langchain-qa_with_references = "^0.0.330"
 faiss-cpu = {version = "^1"}
