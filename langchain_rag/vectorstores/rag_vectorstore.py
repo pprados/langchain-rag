@@ -4,8 +4,6 @@ import hashlib
 import logging
 import uuid
 from copy import copy, deepcopy
-
-# from langchain.storage import EncoderBackedStore
 from typing import (
     Any,
     Callable,
@@ -23,7 +21,6 @@ from typing import (
 from langchain.storage import EncoderBackedStore
 from langchain_core.documents import BaseDocumentTransformer, Document
 from langchain_core.embeddings import Embeddings
-from langchain_core.pydantic_v1 import BaseModel, Extra, Field
 from langchain_core.stores import BaseStore
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from sqlalchemy import (
@@ -60,7 +57,7 @@ def _get_source_id_assigner(
         )
 
 
-class RAGVectorStore(BaseModel, WrapperVectorStore):
+class RAGVectorStore(WrapperVectorStore):
     """Retrieve small chunks then retrieve their parent documents.
 
     When splitting documents for retrieval, there are often conflicting desires:
@@ -109,43 +106,48 @@ class RAGVectorStore(BaseModel, WrapperVectorStore):
             )
     """
 
-    class Config:
-        extra = Extra.forbid
-        arbitrary_types_allowed = True
+    def __init__(
+        self,
+        *,
+        vectorstore: VectorStore,
+        docstore: BaseStore[str, Union[Document, List[str]]],
+        source_id_key: Union[str, Callable[[Document], str], None] = "source",
+        chunk_id_key: str = "_chunk_id",
+        child_ids_key: str = "_child_ids",
+        search_type: str = "similarity",
+        search_kwargs: Optional[dict] = None,
+        chunk_transformer: Optional[BaseDocumentTransformer] = None,
+        parent_transformer: Optional[BaseDocumentTransformer] = None,
+        coef_trunk_k: int = 3,
+    ):
+        """
 
-    vectorstore: VectorStore
-    """The real vectorstore for saving chunks"""
-
-    docstore: BaseStore[str, Union[Document, List[str]]]
-    """The storage layer for the parent documents"""
-
-    source_id_key: Union[str, Callable[[Document], str], None] = "source"
-    """The metadata to identify the id of the parents """
-
-    chunk_id_key: str = "_chunk_id"
-    """The metadata to identify the chunk. Add an id if the chunk can not have one """
-
-    child_ids_key: str = "_child_ids"
-    """Contain a list with the vectorstore id for all 
-    corresponding transformed chunk."""
-
-    search_type: str = "similarity"
-    """Type of search to perform. Defaults to "similarity"."""
-
-    search_kwargs: dict = Field(default_factory=dict)
-    """Keyword arguments to pass to the search function."""
-
-    chunk_transformer: Optional[BaseDocumentTransformer] = None
-    """The transformer to use to create child documents."""
-
-    parent_transformer: Optional[BaseDocumentTransformer] = None
-    """The transformer to use to create parent documents.
-    If none, then the parent documents will be the raw documents passed in."""
-
-    coef_trunk_k: int = 3
-    """If search_kwargs["k"] is not set, use k * coef_trunk_k to loads trunks
-    candidates.
-    """
+        Parameters
+        ----------
+        vectorstore         The real vectorstore for saving chunks
+        docstore            The storage layer for the parent documents
+        source_id_key       The metadata to identify the id of the parents
+        chunk_id_key        The metadata to identify the chunk. Add an id if the chunk
+                            can not have one
+        child_ids_key       Contain a list with the vectorstore id for all corresponding
+                            transformed chunk.
+        search_type         Type of search to perform. Defaults to "similarity".
+        search_kwargs       Keyword arguments to pass to the search function.
+        chunk_transformer   The transformer to use to create child documents.
+        parent_transformer  The transformer to use to create parent documents.
+        coef_trunk_k        If search_kwargs["k"] is not set, use k * coef_trunk_k to
+                            loads trunks candidates.
+        """
+        self.vectorstore = vectorstore
+        self.docstore = docstore
+        self.source_id_key = source_id_key
+        self.chunk_id_key = chunk_id_key
+        self.child_ids_key = child_ids_key
+        self.search_type = search_type
+        self.search_kwargs = search_kwargs or {}
+        self.chunk_transformer = chunk_transformer
+        self.parent_transformer = parent_transformer
+        self.coef_trunk_k = coef_trunk_k
 
     def _get_trunk_from_sub_docs(
         self, sub_docs: List[Document], **kwargs: Any
