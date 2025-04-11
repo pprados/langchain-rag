@@ -32,6 +32,7 @@ jupyterlab_rise = "^0.42"
 pre-commit = "^3.6"
 twine = "^5.1.0"
 importlib-metadata = "7.2.1"
+scikit-learn = "^1.6"
 
 [tool.poetry.group.test.dependencies]
 # The only dependencies that should be added are
@@ -52,7 +53,7 @@ chromadb = "^0.4.10"
 aiosqlite = "*"
 pgvector = "*"
 psycopg2-binary = "*"
-langchain_openai = "^0.2"
+langchain_openai = ">=0.3"
 #langchain-qa_with_references = { path = "../langchain-qa_with_references", develop = true }
 #langchain-qa_with_references = "^0.0.330"
 faiss-cpu = {version = "^1"}

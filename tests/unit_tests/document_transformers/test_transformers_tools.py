@@ -21,6 +21,8 @@ from langchain_rag.document_transformers.summarize_and_questions_transformer imp
 from langchain_rag.document_transformers.summarize_transformer import (
     SummarizeTransformer,
 )
+from langchain_rag.document_transformers.tfidf_transformer import \
+    LemmatizeDocumentTransformer, StemmerDocumentTransformer, TFIDFTransformer
 from tests.unit_tests.documents.sample_transformer import (
     LowerLazyTransformer,
     UpperLazyTransformer,
@@ -641,3 +643,75 @@ async def test_DocumentTransformers_alazy_transform_documents() -> None:
     assert len(result) == 4
     assert result[0].page_content == doc1.page_content.lower()
     assert result[2].page_content == doc1.page_content.upper()
+
+
+def test_lematize_transformer_transform_documents() -> None:
+    doc1 = Document(
+        page_content="""
+    Mathematics is an area of knowledge that includes the topics of numbers, formulas 
+    and related structures, shapes and the spaces in which they are contained, 
+    and quantities and their changes. 
+    """
+    )
+    doc2 = Document(
+        page_content="""
+    The history of mathematics deals with the origin of discoveries in mathematics and 
+    the mathematical methods and notation of the past.'
+    """
+    )
+    transformer = LemmatizeDocumentTransformer(language="english")
+    result = transformer.transform_documents([doc1, doc2])
+    assert len(result) == 2
+    assert (result[0].page_content ==
+            'mathematics area knowledge includes topic number formula related '
+            'structure shape space contained quantity change')
+    assert (result[1].page_content ==
+            'history mathematics deal origin discovery mathematics mathematical '
+            'method notation past')
+
+
+def test_stemmer_transformer_transform_documents() -> None:
+    doc1 = Document(
+        page_content="""
+    Mathematics is an area of knowledge that includes the topics of numbers, formulas 
+    and related structures, shapes and the spaces in which they are contained, 
+    and quantities and their changes. 
+    """
+    )
+    doc2 = Document(
+        page_content="""
+    The history of mathematics deals with the origin of discoveries in mathematics and 
+    the mathematical methods and notation of the past.'
+    """
+    )
+    transformer = StemmerDocumentTransformer(language="english")
+    result = transformer.transform_documents([doc1, doc2])
+    assert len(result) == 2
+    assert (result[0].page_content ==
+            'mathemat area knowledg includ topic number formula relat structur shape '
+            'space contain quantiti chang')
+    assert (result[1].page_content ==
+            'histori mathemat deal origin discoveri mathemat mathemat method '
+            'notat past')
+
+
+def test_tfid_transformer_transform_documents() -> None:
+    doc1 = Document(
+        page_content="""
+    Mathematics is an area of knowledge that includes the topics of numbers, formulas 
+    and related structures, shapes and the spaces in which they are contained, 
+    and quantities and their changes. 
+    """
+    )
+    doc2 = Document(
+        page_content="""
+    The history of mathematics deals with the origin of discoveries in mathematics and 
+    the mathematical methods and notation of the past.'
+    """
+    )
+    transformer = TFIDFTransformer()
+    result = transformer.transform_documents([doc1, doc2])
+    assert transformer.tfidf_retriever != None
+    assert len(result) == 0
+
+

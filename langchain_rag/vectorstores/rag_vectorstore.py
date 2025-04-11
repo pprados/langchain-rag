@@ -552,8 +552,6 @@ class RAGVectorStore(WrapperVectorStore):
         if not ids:
             raise ValueError("ids must be set")
         if self.parent_transformer:
-            if not ids:
-                raise ValueError("ids must be set")
             lists_of_chunk_by_doc_ids = cast(List[List[str]], self.docstore.mget(ids))
             chunk_by_doc_ids: List[str] = []
             for list_of_ids in lists_of_chunk_by_doc_ids:
@@ -576,7 +574,7 @@ class RAGVectorStore(WrapperVectorStore):
                     )
         if transformed_ids:
             self.docstore.mdelete(ids)
-            self.vectorstore.delete(ids=list(transformed_ids))
+            return self.vectorstore.delete(ids=list(transformed_ids))
         elif self.parent_transformer:
             return self.vectorstore.delete(ids=chunk_by_doc_ids)
         elif not self.parent_transformer and self.chunk_transformer:
