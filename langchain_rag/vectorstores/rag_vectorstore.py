@@ -576,14 +576,13 @@ class RAGVectorStore(WrapperVectorStore):
                     )
         if transformed_ids:
             self.docstore.mdelete(ids)
-            self.vectorstore.delete(ids=list(transformed_ids))
+            return self.vectorstore.delete(ids=list(transformed_ids))
         elif self.parent_transformer:
             return self.vectorstore.delete(ids=chunk_by_doc_ids)
         elif not self.parent_transformer and self.chunk_transformer:
             return len(transformed_ids) != 0
         else:
             return self.vectorstore.delete(ids=ids)
-        return False
 
     async def adelete(
         self, ids: Optional[List[str]] = None, **kwargs: Any
@@ -619,14 +618,13 @@ class RAGVectorStore(WrapperVectorStore):
                     )
         if transformed_ids:
             await self.docstore.amdelete(ids)
-            await self.vectorstore.adelete(ids=list(transformed_ids))
+            return await self.vectorstore.adelete(ids=list(transformed_ids))
         elif self.parent_transformer:
             return await self.vectorstore.adelete(ids=chunk_by_doc_ids)
         elif not self.parent_transformer and self.chunk_transformer:
             return len(transformed_ids) != 0
         else:
             return await self.vectorstore.adelete(ids=ids)
-        return False
 
     @classmethod
     def from_texts(
