@@ -12,8 +12,8 @@ from typing import (
 from unittest.mock import call
 
 import pytest
-from langchain.storage import InMemoryStore
-from langchain.text_splitter import CharacterTextSplitter
+from langchain_classic.storage import InMemoryStore
+from langchain_classic.text_splitter import CharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
@@ -231,7 +231,7 @@ def test_parent_and_chunk_transformer(mocker: MockerFixture) -> None:
 
     # ----
     ids = vs.add_documents([doc1, doc2])
-    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
+    result = vs.as_retriever().invoke(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
@@ -328,7 +328,7 @@ def test_parent_and_chunk_tranformer_childid(mocker: MockerFixture) -> None:
 
     # ----
     ids = vs.add_documents([doc1, doc2])
-    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
+    result = vs.as_retriever().invoke(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
@@ -418,7 +418,7 @@ def test_parent_and_chunk_transformer_ids(mocker: MockerFixture) -> None:
 
     # ----
     ids = vs.add_documents([doc1, doc2], ids=force_ids)
-    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
+    result = vs.as_retriever().invoke(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
@@ -505,7 +505,7 @@ def test_chunk_transformer(mocker: MockerFixture) -> None:
     # ----
 
     ids = vs.add_documents(documents=split_docs)
-    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
+    result = vs.as_retriever().invoke(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
@@ -591,7 +591,7 @@ def test_chunk_transformer_ids(mocker: MockerFixture) -> None:
     force_ids = [str(fake_uuid()) for _ in range(0, len(split_docs))]
     # ----
     ids = vs.add_documents(documents=split_docs, ids=force_ids)
-    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
+    result = vs.as_retriever().invoke(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
@@ -676,7 +676,7 @@ def test_parent_transformer(mocker: MockerFixture) -> None:
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     # ----
     ids = vs.add_documents(documents=[doc1, doc2])
-    result = vs.as_retriever(search_kwargs={"k": 20}).get_relevant_documents(
+    result = vs.as_retriever(search_kwargs={"k": 20}).invoke(
         doc1.page_content
     )
     vs.delete(ids)
@@ -767,7 +767,7 @@ def test_parent_transformer_ids(mocker: MockerFixture) -> None:
     force_ids = [str(fake_uuid()) for _ in range(0, len(docs))]
     # ----
     ids = vs.add_documents(documents=docs, ids=force_ids)
-    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
+    result = vs.as_retriever().invoke(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
@@ -854,7 +854,7 @@ def test_without_transformer(mocker: MockerFixture) -> None:
     # ).transform([doc1])
 
     ids = vs.add_documents(documents=split_docs)
-    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
+    result = vs.as_retriever().invoke(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
@@ -915,7 +915,7 @@ def test_without_transformer_ids(mocker: MockerFixture) -> None:
     force_ids = [str(fake_uuid()) for _ in range(0, len(split_docs))]
     # ----
     ids = vs.add_documents(documents=split_docs, ids=force_ids)
-    result = vs.as_retriever().get_relevant_documents(doc1.page_content)
+    result = vs.as_retriever().invoke(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"

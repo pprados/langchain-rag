@@ -53,8 +53,8 @@ def test_from_text() -> None:
 
 
 def test_self_query_with_wrapper_vectorstore() -> None:
-    with mock.patch("langchain.vectorstores.chroma.Chroma.__init__") as patch:
-        from langchain.retrievers.self_query.base import _get_builtin_translator
+    with mock.patch("langchain_classic.vectorstores.chroma.Chroma.__init__") as patch:
+        from langchain_classic.retrievers.self_query.base import _get_builtin_translator
         from langchain_community.query_constructors.chroma import ChromaTranslator
         from langchain_community.vectorstores.chroma import Chroma
 

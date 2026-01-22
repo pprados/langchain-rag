@@ -10,8 +10,8 @@ from typing import (
     cast,
 )
 
-from langchain.chains import LLMChain
-from langchain.output_parsers import PydanticOutputParser
+from langchain_classic.chains import LLMChain
+from langchain_classic.output_parsers import PydanticOutputParser
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.output_parsers import BaseOutputParser

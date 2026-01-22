@@ -183,7 +183,7 @@ if __name__.startswith("langchain_"):
         This is a hack, to dynamically path the _get_builtin_translator()
         if we use the component before accepting the pull-request
         """
-        from langchain.retrievers.self_query import base as to_patch
+        from langchain_classic.retrievers.self_query import base as to_patch
 
         old_get_builtin_translator = to_patch._get_builtin_translator
 

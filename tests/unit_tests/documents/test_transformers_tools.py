@@ -5,7 +5,8 @@ import pytest
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.documents import Document
 from langchain_core.language_models import LLM, BaseLLM
-from langchain_core.pydantic_v1 import validator
+
+from pydantic.v1 import validator
 
 from langchain_rag.document_transformers.copy_transformer import CopyDocumentTransformer
 
