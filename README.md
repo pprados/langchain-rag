@@ -1,6 +1,8 @@
 Langchain-RAG
 =============
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pprados/langchain-rag)
+
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/pprados/langchain-rag?quickstart=1)
 
 > Note: A [pull-request](https://github.com/langchain-ai/langchain/pull/13910) with this code was proposed to langchain.
