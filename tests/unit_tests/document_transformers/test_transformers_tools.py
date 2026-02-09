@@ -6,6 +6,7 @@ from langchain_core.documents import Document
 
 # Note: Import directly from langchain_core is not stable and generate some errors
 from langchain_core.language_models import LLM, BaseLLM
+from pydantic.v1 import validator
 
 from langchain_rag.document_transformers import (
     DocumentTransformerPipeline,
@@ -20,9 +21,6 @@ from langchain_rag.document_transformers.summarize_and_questions_transformer imp
 from langchain_rag.document_transformers.summarize_transformer import (
     SummarizeTransformer,
 )
-
-from pydantic.v1 import validator
-
 from tests.unit_tests.documents.sample_transformer import (
     LowerLazyTransformer,
     UpperLazyTransformer,
@@ -98,17 +96,16 @@ def init_llm(
             sequential_responses=True,
         )
     else:
-        import langchain
+        import langchain_openai
         from dotenv import load_dotenv
+        from langchain.globals import set_llm_cache
         from langchain_community.cache import SQLiteCache
 
         load_dotenv()
 
         if USE_CACHE:
-            langchain.llm_cache = SQLiteCache(
-                database_path="/tmp/cache_qa_with_reference.db"
-            )
-        llm = langchain.OpenAI(
+            set_llm_cache(SQLiteCache(database_path="/tmp/cache_qa_with_reference.db"))
+        llm = langchain_openai.OpenAI(
             temperature=TEMPERATURE,
             max_tokens=max_token,
             # cache=False,
@@ -118,21 +115,17 @@ def init_llm(
 
 # %% generate_questions
 def test_generate_questions_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, and 
     quantities and their changes. These topics are represented in modern mathematics 
     with the major subdisciplines of number theory, algebra, geometry, and analysis, 
     respectively. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "\n\n"
@@ -154,21 +147,17 @@ def test_generate_questions_transform_documents() -> None:
 
 
 def test_generate_questions_lazy_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, 
     formulas and related structures, shapes and the spaces in which they are 
     contained, and quantities and their changes. These topics are represented 
     in modern mathematics with the major subdisciplines of number theory, algebra, 
     geometry, and analysis, respectively. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "\n\n"
@@ -191,21 +180,17 @@ def test_generate_questions_lazy_transform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_questions_atransform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, and 
     quantities and their changes. These topics are represented in modern mathematics 
     with the major subdisciplines of number theory, algebra, geometry, and analysis, 
     respectively. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "\n\n"
@@ -228,21 +213,17 @@ async def test_generate_questions_atransform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_questions_alazy_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, and 
     quantities and their changes. These topics are represented in modern mathematics 
     with the major subdisciplines of number theory, algebra, geometry, and analysis, 
     respectively. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "\n\n"
@@ -269,19 +250,15 @@ async def test_generate_questions_alazy_transform_documents() -> None:
 
 
 def test_sumarize_transformer_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "SUMMARY:\nMathematics is the study of numbers, formulas, shapes, "
@@ -298,19 +275,15 @@ def test_sumarize_transformer_transform_documents() -> None:
 
 
 def test_sumarize_transformer_lazy_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "SUMMARY:\nMathematics is the study of numbers, formulas, "
@@ -328,19 +301,15 @@ def test_sumarize_transformer_lazy_transform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_sumarize_transformer_atransform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "SUMMARY:\nMathematics is the study of numbers, formulas, shapes, "
@@ -358,19 +327,15 @@ async def test_sumarize_transformer_atransform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_sumarize_transformer_alazy_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "SUMMARY:\nMathematics is the study of numbers, formulas, "
@@ -392,19 +357,15 @@ async def test_sumarize_transformer_alazy_transform_documents() -> None:
 
 
 def test_sumarize_and_questions_transformer_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "Output:\n"
@@ -441,19 +402,15 @@ def test_sumarize_and_questions_transformer_transform_documents() -> None:
 
 
 def test_sumarize_and_questions_transformer_lazy_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "Output:\n"
@@ -491,19 +448,15 @@ def test_sumarize_and_questions_transformer_lazy_transform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_sumarize_and_questions_transformer_atransform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "Output:\n"
@@ -541,19 +494,15 @@ async def test_sumarize_and_questions_transformer_atransform_documents() -> None
 
 @pytest.mark.asyncio
 async def test_sumarize_and_questions_transformer_alazy_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     llm = init_llm(
         {
             0: "Output:\n"
@@ -594,19 +543,15 @@ async def test_sumarize_and_questions_transformer_alazy_transform_documents() ->
 # %%
 @pytest.mark.asyncio
 async def test_DocumentTransformerPipeline_alazy_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     trans1 = LowerLazyTransformer()
     trans2 = UpperLazyTransformer()
     transformer = DocumentTransformerPipeline(
@@ -621,19 +566,15 @@ async def test_DocumentTransformerPipeline_alazy_transform_documents() -> None:
 
 @pytest.mark.asyncio
 async def test_DocumentTransformers_alazy_transform_documents() -> None:
-    doc1 = Document(
-        page_content="""
+    doc1 = Document(page_content="""
     Mathematics is an area of knowledge that includes the topics of numbers, formulas 
     and related structures, shapes and the spaces in which they are contained, 
     and quantities and their changes. 
-    """
-    )
-    doc2 = Document(
-        page_content="""
+    """)
+    doc2 = Document(page_content="""
     The history of mathematics deals with the origin of discoveries in mathematics and 
     the mathematical methods and notation of the past.'
-    """
-    )
+    """)
     trans1 = LowerLazyTransformer()
     trans2 = UpperLazyTransformer()
     transformer = DocumentTransformers(transformers=[trans1, trans2], batch_size=100)

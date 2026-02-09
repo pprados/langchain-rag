@@ -59,7 +59,7 @@ class FakeUUIDFactory:
 
 
 def _must_be_called(
-    must_be_called: List[Tuple[List[str], List[Dict[str, Any]]]]
+    must_be_called: List[Tuple[List[str], List[Dict[str, Any]]]],
 ) -> List[Any]:
     calls = []
     for page_contents, metadatas in must_be_called:
@@ -182,9 +182,9 @@ class SplitterWithUniqId(CharacterTextSplitter):
     def split_documents(self, documents: Iterable[Document]) -> List[Document]:
         documents = super().split_documents(documents)
         for doc in documents:
-            doc.metadata[
-                "split_id"
-            ] = f'{doc.metadata["id"]}-{doc.metadata["start_index"]}'
+            doc.metadata["split_id"] = (
+                f'{doc.metadata["id"]}-{doc.metadata["start_index"]}'
+            )
         return documents
 
 
@@ -676,9 +676,7 @@ def test_parent_transformer(mocker: MockerFixture) -> None:
     doc2 = Document(page_content="Happy days", metadata={"id": 2})
     # ----
     ids = vs.add_documents(documents=[doc1, doc2])
-    result = vs.as_retriever(search_kwargs={"k": 20}).invoke(
-        doc1.page_content
-    )
+    result = vs.as_retriever(search_kwargs={"k": 20}).invoke(doc1.page_content)
     vs.delete(ids)
     # ----
     assert result[0].page_content == "Hello"
@@ -1277,7 +1275,7 @@ def test_similarity_search_with_score_and_coef_trunk_k(mocker: MockerFixture) ->
         chunk_transformer=chunk_transformer,
         docstore=docstore,
         source_id_key="id",
-        coef_trunk_k=2
+        coef_trunk_k=2,
         # search_kwargs={"k": 10},
     )
     doc1 = Document(page_content="Hello word", metadata={"id": 1})

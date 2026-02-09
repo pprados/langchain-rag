@@ -107,7 +107,7 @@ class SummarizeAndQuestionsTransformer(LazyDocumentTransformer):
                 metadata["transformer"] = self.__class__.__name__
                 yield Document(page_content=q, metadata=metadata)
 
-    async def _alazy_transform_documents(  # type:ignore
+    async def _alazy_transform_documents(  # type: ignore
         self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         """Compress page content of raw documents."""

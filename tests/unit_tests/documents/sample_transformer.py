@@ -1,6 +1,7 @@
 """
 Some very simple transformer (lower, upper), lazy and compatible with LCEL.
 """
+
 import copy
 from typing import Any, AsyncIterator, Callable, Iterator
 
@@ -28,7 +29,7 @@ class _LazyTransformer(LazyDocumentTransformer):
             for doc in documents
         )
 
-    async def _alazy_transform_documents(  # type:ignore
+    async def _alazy_transform_documents(  # type: ignore
         self, documents: AsyncIterator[Document], **kwargs: Any
     ) -> AsyncIterator[Document]:
         async for doc in documents:

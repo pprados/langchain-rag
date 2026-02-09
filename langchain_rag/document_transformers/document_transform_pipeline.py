@@ -10,7 +10,6 @@ from .lazy_document_transformer import (
 
 
 class DocumentTransformerPipeline(LazyDocumentTransformer):
-
     """List of document transformers that are chained together and run in sequence."""
 
     def __init__(

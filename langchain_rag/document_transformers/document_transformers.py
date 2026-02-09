@@ -24,7 +24,9 @@ if sys.version_info.major > 3 or sys.version_info.minor >= 12:
     from itertools import batched  # type: ignore[attr-defined]
 else:
 
-    def batched(iterable: Iterable[T], n: int) -> Iterator[Tuple[T, ...]]:
+    def batched(  # type: ignore
+        iterable: Iterable[T], n: int
+    ) -> (Iterator)[Tuple[T, ...]]:
         if n < 1:
             raise ValueError("n must be at least one")
         it = iter(iterable)

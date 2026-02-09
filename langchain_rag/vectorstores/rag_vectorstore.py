@@ -359,10 +359,8 @@ class RAGVectorStore(WrapperVectorStore):
             )
         else:
             for chunk_id, chunk_doc in zip(chunk_ids, chunk_documents):
-                all_transformed_chunk: Sequence[
-                    Document
-                ] = self.chunk_transformer.transform_documents(
-                    [chunk_doc]
+                all_transformed_chunk: Sequence[Document] = (
+                    self.chunk_transformer.transform_documents([chunk_doc])
                 )  # PPR: transform multiple documents or one by one?
                 if not all_transformed_chunk:
                     raise ValueError(
@@ -505,10 +503,8 @@ class RAGVectorStore(WrapperVectorStore):
             )
         else:
             for chunk_id, chunk_doc in zip(chunk_ids, chunk_documents):
-                all_transformed_chunk: Sequence[
-                    Document
-                ] = await self.chunk_transformer.atransform_documents(
-                    [chunk_doc]
+                all_transformed_chunk: Sequence[Document] = (
+                    await self.chunk_transformer.atransform_documents([chunk_doc])
                 )  # PPR: use multiple documents?
                 # If in transformed chunk, add the id of the associated chunk
                 for transformed_chunk in all_transformed_chunk:
