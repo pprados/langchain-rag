@@ -9,8 +9,8 @@ from typing import (
     Optional,
 )
 
-from langchain.chains import LLMChain
-from langchain.output_parsers import NumberedListOutputParser
+from langchain_classic.chains import LLMChain
+from langchain_classic.output_parsers import NumberedListOutputParser
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.prompts import PromptTemplate

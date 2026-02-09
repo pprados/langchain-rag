@@ -18,7 +18,7 @@ from typing import (
     cast,
 )
 
-from langchain.storage import EncoderBackedStore
+from langchain_classic.storage import EncoderBackedStore
 from langchain_core.documents import BaseDocumentTransformer, Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.stores import BaseStore
@@ -85,7 +85,7 @@ class RAGVectorStore(WrapperVectorStore):
             from langchain_community.vectorstores import Chroma
             from langchain_openai.embeddings import OpenAIEmbeddings
             from langchain_core.text_splitter import RecursiveCharacterTextSplitter
-            from langchain.storage import InMemoryStore
+            from langchain_classic.storage import InMemoryStore
 
             # This text splitter is used to create the parent documents
             parent_splitter = RecursiveCharacterTextSplitter(chunk_size=2000)
@@ -802,7 +802,7 @@ class RAGVectorStore(WrapperVectorStore):
         source_id_key: Union[str, Callable[[Document], str]] = "source",
         **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
-        from langchain.storage import InMemoryStore
+        from langchain_classic.storage import InMemoryStore
         from langchain_core.indexing import InMemoryRecordManager
 
         record_manager = InMemoryRecordManager(namespace="in-memory")

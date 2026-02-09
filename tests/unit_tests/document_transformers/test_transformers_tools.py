@@ -6,7 +6,6 @@ from langchain_core.documents import Document
 
 # Note: Import directly from langchain_core is not stable and generate some errors
 from langchain_core.language_models import LLM, BaseLLM
-from langchain_core.pydantic_v1 import validator
 
 from langchain_rag.document_transformers import (
     DocumentTransformerPipeline,
@@ -21,6 +20,9 @@ from langchain_rag.document_transformers.summarize_and_questions_transformer imp
 from langchain_rag.document_transformers.summarize_transformer import (
     SummarizeTransformer,
 )
+
+from pydantic.v1 import validator
+
 from tests.unit_tests.documents.sample_transformer import (
     LowerLazyTransformer,
     UpperLazyTransformer,

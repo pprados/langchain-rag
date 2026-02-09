@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, Generator, cast
 
 import pytest
-from langchain.storage._lc_store import create_kv_docstore, create_lc_store
+from langchain_classic.storage._lc_store import create_kv_docstore, create_lc_store
 from langchain_community.storage import SQLStore
 from langchain_core.documents import Document
 from langchain_core.stores import BaseStore
