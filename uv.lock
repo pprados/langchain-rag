@@ -1422,6 +1422,16 @@ wheels = [
 ]
 
 [[package]]
+name = "hnswlib"
+version = "0.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/7a/1a9b1405f2eb59515f06c3074750b03e0e96edf7fee0f6dd6df81d9c21d7/hnswlib-0.8.0.tar.gz", hash = "sha256:cb6d037eedebb34a7134e7dc78966441dfd04c9cf5ee93911be911ced951c44c", size = 36206, upload-time = "2023-12-03T04:16:17.55Z" }
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -2290,7 +2300,6 @@ wheels = [
 
 [[package]]
 name = "langchain-rag"
-version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "greenlet" },
@@ -2335,6 +2344,7 @@ test = [
     { name = "chromadb" },
     { name = "faiss-cpu" },
     { name = "freezegun" },
+    { name = "hnswlib" },
     { name = "langchain-openai" },
     { name = "lark" },
     { name = "pgvector" },
@@ -2392,6 +2402,7 @@ test = [
     { name = "chromadb", specifier = ">=0.4.10" },
     { name = "faiss-cpu", specifier = ">=1" },
     { name = "freezegun", specifier = ">=1.2.2" },
+    { name = "hnswlib", specifier = ">=0.8.0" },
     { name = "langchain-openai", specifier = ">=1.1" },
     { name = "lark", specifier = ">=1.1" },
     { name = "pgvector" },

@@ -4,4 +4,7 @@
     <option name="sdkName" value="Poetry (langchain-rag)" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="uv (langchain-rag)" project-jdk-type="Python SDK" />
+  <component name="PythonCompatibilityInspectionAdvertiser">
+    <option name="version" value="3" />
+  </component>
 </project>

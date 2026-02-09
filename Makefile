@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
+.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests
 POETRY_EXTRA?=--all-extras
 POETRY_WITH?=dev,lint,test,codespell
 
@@ -9,11 +9,11 @@ all: help
 # Define a variable for the test file path.
 TEST_FILE ?= tests/unit_tests/
 
-.make-rag_vectorstore.ipynb: docs/integrations/vectorstores/rag_vectorstore.ipynb
-	@jupyter execute $<
-	@touch .make-rag_vectorstore.ipynb
+.make-rag_vectorstore-ipynb: docs/integrations/vectorstores/rag_vectorstore.ipynb
+	@uv run jupyter execute $<
+	@touch .make-rag_vectorstore-ipynb
 
-integration_tests:.make-rag_vectorstore.ipynb
+integration-tests:.make-rag_vectorstore-ipynb
 	uv run pytest tests/integration_tests
 
 test tests:
@@ -123,7 +123,7 @@ endif
 # SNIPPET pour publier la version sur pypi.org.
 .PHONY: release
 ## Publish distribution on pypi.org
-release: validate integration_tests clean dist
+release: validate integration-tests clean dist
 ifeq ($(OFFLINE),True)
 	@echo -e "$(red)Can not release in offline mode$(normal)"
 else
