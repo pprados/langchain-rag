@@ -10,12 +10,11 @@ from typing import (
     cast,
 )
 
-from langchain_classic.chains import LLMChain
-from langchain_classic.output_parsers import PydanticOutputParser
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseLanguageModel
-from langchain_core.output_parsers import BaseOutputParser
+from langchain_core.output_parsers import BaseOutputParser, PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import Runnable, RunnableConfig
 
 # from langchain_core.pydantic_v1 import BaseModel
 from pydantic import BaseModel
@@ -68,17 +67,17 @@ def _get_default_chain_prompt() -> PromptTemplate:
 class SummarizeAndQuestionsTransformer(LazyDocumentTransformer):
     """Generate questions and summarize for each Documents."""
 
-    llm_chain: LLMChain
+    chain: Runnable
     get_input: Callable[[Document], dict] = _default_get_input
     nb_of_questions: int = 3
 
     def __init__(
         self,
-        llm_chain: LLMChain,
+        chain: Runnable,
         get_input: Callable[[Document], dict] = _default_get_input,
         nb_of_questions: int = 3,
     ):
-        self.llm_chain = llm_chain
+        self.chain = chain
         self.get_input = get_input
         self.nb_of_questions = nb_of_questions
 
@@ -94,10 +93,7 @@ class SummarizeAndQuestionsTransformer(LazyDocumentTransformer):
             }
             output = cast(
                 _SummarizeAndQuestions,
-                self.llm_chain.predict(
-                    callbacks=_callbacks,
-                    **_input,
-                ),
+                self.chain.invoke(_input, config={"callbacks": _callbacks}),
             )
             if not output:
                 continue
@@ -120,10 +116,7 @@ class SummarizeAndQuestionsTransformer(LazyDocumentTransformer):
             }
             output = cast(
                 _SummarizeAndQuestions,
-                await self.llm_chain.apredict(
-                    callbacks=_callbacks,
-                    **_input,
-                ),
+                await self.chain.ainvoke(_input, config={"callbacks": _callbacks}),
             )
             if not output:
                 continue
@@ -145,13 +138,11 @@ class SummarizeAndQuestionsTransformer(LazyDocumentTransformer):
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
-        assert _prompt.output_parser
-        llm_chain = LLMChain(
-            llm=llm,
-            prompt=_prompt,
-            output_parser=cast(BaseOutputParser, _prompt.output_parser),
-            **(llm_chain_kwargs or {}),
-        )
-        return cls(
-            llm_chain=llm_chain, get_input=_get_input, nb_of_questions=nb_of_questions
-        )
+        if not _prompt.output_parser:
+            raise ValueError("Prompt must have an output_parser")
+
+        chain: Runnable = _prompt | llm | _prompt.output_parser
+        if llm_chain_kwargs:
+            chain = chain.with_config(cast(RunnableConfig, llm_chain_kwargs))
+
+        return cls(chain=chain, get_input=_get_input, nb_of_questions=nb_of_questions)

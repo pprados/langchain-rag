@@ -7,13 +7,14 @@ from typing import (
     Dict,
     Iterator,
     Optional,
+    cast,
 )
 
-from langchain_classic.chains import LLMChain
-from langchain_classic.output_parsers import NumberedListOutputParser
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseLanguageModel
+from langchain_core.output_parsers import NumberedListOutputParser, StrOutputParser
 from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import Runnable, RunnableConfig
 
 from langchain_rag.document_transformers.lazy_document_transformer import (
     LazyDocumentTransformer,
@@ -46,7 +47,7 @@ def _get_default_chain_prompt() -> PromptTemplate:
 class SummarizeTransformer(LazyDocumentTransformer):
     """Generate questions for each Documents."""
 
-    llm_chain: LLMChain
+    chain: Runnable
     get_input: Callable[[Document], dict] = _default_get_input
 
     """LLM wrapper to use for compressing documents."""
@@ -59,7 +60,7 @@ class SummarizeTransformer(LazyDocumentTransformer):
         _callbacks = kwargs.get("callbacks", None)
         for doc in documents:
             _input = self.get_input(doc)
-            output = self.llm_chain.predict(callbacks=_callbacks, **_input)
+            output = self.chain.invoke(_input, config={"callbacks": _callbacks})
             if not output:
                 continue
             metadata = copy.deepcopy(doc.metadata)
@@ -74,7 +75,7 @@ class SummarizeTransformer(LazyDocumentTransformer):
         _callbacks = kwargs.get("callbacks", None)
         async for doc in documents:
             _input = self.get_input(doc)
-            output = await self.llm_chain.apredict(callbacks=_callbacks, **_input)
+            output = await self.chain.ainvoke(_input, config={"callbacks": _callbacks})
             if not output:
                 continue
             metadata = copy.deepcopy(doc.metadata)
@@ -94,17 +95,16 @@ class SummarizeTransformer(LazyDocumentTransformer):
         """Initialize from LLM."""
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
-        llm_chain = LLMChain(
-            llm=llm,
-            prompt=_prompt,
-            **(llm_chain_kwargs or {}),
-        )
-        return cls(llm_chain=llm_chain, get_input=_get_input)
+        chain: Runnable = _prompt | llm | StrOutputParser()
+        if llm_chain_kwargs:
+            chain = chain.with_config(cast(RunnableConfig, llm_chain_kwargs))
+
+        return cls(chain=chain, get_input=_get_input)
 
     def __init__(
         self,
-        llm_chain: LLMChain,
+        chain: Runnable,
         get_input: Callable[[Document], Dict[str, Any]] = _default_get_input,
     ):
-        self.llm_chain = llm_chain
+        self.chain = chain
         self.get_input = get_input

@@ -6,8 +6,10 @@ import uuid
 from copy import copy, deepcopy
 from typing import (
     Any,
+    AsyncIterator,
     Callable,
     Dict,
+    Iterator,
     List,
     Optional,
     Sequence,
@@ -18,7 +20,6 @@ from typing import (
     cast,
 )
 
-from langchain_classic.storage import EncoderBackedStore
 from langchain_core.documents import BaseDocumentTransformer, Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.stores import BaseStore
@@ -38,6 +39,68 @@ logger = logging.getLogger(__name__)
 
 # %%
 VST = TypeVar("VST", bound="VectorStore")
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+class EncoderBackedStore(BaseStore[K, V]):
+    def __init__(
+        self,
+        store: BaseStore[K, bytes],
+        key_encoder: Callable[[K], K],
+        value_serializer: Callable[[V], bytes],
+        value_deserializer: Callable[[bytes], V],
+    ):
+        self.store = store
+        self.key_encoder = key_encoder
+        self.value_serializer = value_serializer
+        self.value_deserializer = value_deserializer
+
+    def mget(self, keys: Sequence[K]) -> List[Optional[V]]:
+        encoded_keys = [self.key_encoder(key) for key in keys]
+        encoded_values = self.store.mget(encoded_keys)
+        return [
+            self.value_deserializer(value) if value is not None else None
+            for value in encoded_values
+        ]
+
+    async def amget(self, keys: Sequence[K]) -> List[Optional[V]]:
+        encoded_keys = [self.key_encoder(key) for key in keys]
+        encoded_values = await self.store.amget(encoded_keys)
+        return [
+            self.value_deserializer(value) if value is not None else None
+            for value in encoded_values
+        ]
+
+    def mset(self, key_value_pairs: Sequence[Tuple[K, V]]) -> None:
+        encoded_pairs = [
+            (self.key_encoder(key), self.value_serializer(value))
+            for key, value in key_value_pairs
+        ]
+        self.store.mset(encoded_pairs)
+
+    async def amset(self, key_value_pairs: Sequence[Tuple[K, V]]) -> None:
+        encoded_pairs = [
+            (self.key_encoder(key), self.value_serializer(value))
+            for key, value in key_value_pairs
+        ]
+        await self.store.amset(encoded_pairs)
+
+    def mdelete(self, keys: Sequence[K]) -> None:
+        encoded_keys = [self.key_encoder(key) for key in keys]
+        self.store.mdelete(encoded_keys)
+
+    async def amdelete(self, keys: Sequence[K]) -> None:
+        encoded_keys = [self.key_encoder(key) for key in keys]
+        await self.store.amdelete(encoded_keys)
+
+    def yield_keys(self, prefix: Optional[str] = None) -> Iterator[K]:
+        for key in self.store.yield_keys(prefix):  # type: ignore[misc]
+            yield cast(K, key)
+
+    async def ayield_keys(self, prefix: Optional[str] = None) -> AsyncIterator[K]:
+        async for key in self.store.ayield_keys(prefix):  # type: ignore[misc]
+            yield cast(K, key)
 
 
 def _get_source_id_assigner(
@@ -85,7 +148,7 @@ class RAGVectorStore(WrapperVectorStore):
             from langchain_community.vectorstores import Chroma
             from langchain_openai.embeddings import OpenAIEmbeddings
             from langchain_core.text_splitter import RecursiveCharacterTextSplitter
-            from langchain_classic.storage import InMemoryStore
+            from langchain_core.stores import InMemoryStore
 
             # This text splitter is used to create the parent documents
             parent_splitter = RecursiveCharacterTextSplitter(chunk_size=2000)
@@ -798,8 +861,8 @@ class RAGVectorStore(WrapperVectorStore):
         source_id_key: Union[str, Callable[[Document], str]] = "source",
         **kwargs: Any,
     ) -> Tuple["RAGVectorStore", Dict[str, Any]]:
-        from langchain_classic.storage import InMemoryStore
         from langchain_core.indexing import InMemoryRecordManager
+        from langchain_core.stores import InMemoryStore
 
         record_manager = InMemoryRecordManager(namespace="in-memory")
         docstore = InMemoryStore()

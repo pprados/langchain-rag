@@ -9,11 +9,11 @@ from typing import (
     cast,
 )
 
-from langchain_classic.chains import LLMChain
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.output_parsers import BaseOutputParser, NumberedListOutputParser
 from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import Runnable
 
 from langchain_rag.document_transformers.lazy_document_transformer import (
     LazyDocumentTransformer,
@@ -51,13 +51,13 @@ def _get_default_chain_prompt() -> PromptTemplate:
 class GenerateQuestionsTransformer(LazyDocumentTransformer):
     """Generate questions for each Documents."""
 
-    llm_chain: LLMChain
+    llm_chain: Runnable
     get_input: Callable[[Document], dict] = _default_get_input
     nb_of_questions: int = 3
 
     def __init__(
         self,
-        llm_chain: LLMChain,
+        llm_chain: Runnable,
         get_input: Callable[[Document], dict] = _default_get_input,
         nb_of_questions: int = 3,
     ):
@@ -69,20 +69,17 @@ class GenerateQuestionsTransformer(LazyDocumentTransformer):
         self, documents: Iterator[Document], **kwargs: Any
     ) -> Iterator[Document]:
         _callbacks = kwargs.get("callbacks", None)
-        max_retry = 3
         for doc in documents:  # PPR: work with batch?
             _input = {
                 **self.get_input(doc),
                 **{"nb_of_questions": self.nb_of_questions},
             }
             output = cast(
-                Sequence[str], self.llm_chain.predict(callbacks=_callbacks, **_input)
+                Sequence[str],
+                self.llm_chain.invoke(_input, config={"callbacks": _callbacks}),
             )
             if not output:
-                if max_retry := max_retry - 1:
-                    continue
-                else:
-                    return
+                continue
             for question in output:
                 yield Document(page_content=question, metadata=doc.metadata)
 
@@ -100,7 +97,7 @@ class GenerateQuestionsTransformer(LazyDocumentTransformer):
             }
             output = cast(
                 Sequence[str],
-                await self.llm_chain.apredict(callbacks=_callbacks, **_input),
+                await self.llm_chain.ainvoke(_input, config={"callbacks": _callbacks}),
             )
             if not output:
                 continue
@@ -120,12 +117,7 @@ class GenerateQuestionsTransformer(LazyDocumentTransformer):
         _prompt = prompt if prompt is not None else _get_default_chain_prompt()
         _get_input = get_input if get_input is not None else _default_get_input
         assert _prompt.output_parser
-        llm_chain = LLMChain(
-            llm=llm,
-            prompt=_prompt,
-            output_parser=cast(BaseOutputParser, _prompt.output_parser),
-            **(llm_chain_kwargs or {}),
-        )
+        llm_chain = _prompt | llm | cast(BaseOutputParser, _prompt.output_parser)
         return cls(
             llm_chain=llm_chain, get_input=_get_input, nb_of_questions=nb_of_questions
         )
